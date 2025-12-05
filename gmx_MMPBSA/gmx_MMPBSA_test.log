@@ -1,0 +1,22 @@
+[INFO   ] Cloning gmx_MMPBSA repository in /home/hackathon/autoMD_salome/gmx_MMPBSA/gmx_MMPBSA_test
+[INFO   ] Cloning gmx_MMPBSA repository...Done.
+[INFO   ]                           Example                                STATE
+[INFO   ] Protein-Ligand (Single trajectory approximation)               RUNNING
+[INFO   ] Protein-Ligand (Single trajectory approximation)       [ 1/ 9]    DONE
+[INFO   ] Protein-Protein                                                RUNNING
+[INFO   ] Protein-Protein                                        [ 2/ 9]    DONE
+[INFO   ] Protein-DNA                                                    RUNNING
+[INFO   ] Protein-DNA                                            [ 3/ 9]    DONE
+[INFO   ] Protein-Glycan                                                 RUNNING
+[INFO   ] Protein-Glycan                                         [ 4/ 9]    DONE
+[INFO   ] Comp_receptor                                                  RUNNING
+[INFO   ] Comp_receptor                                          [ 5/ 9]    DONE
+[INFO   ] Alanine Scanning                                               RUNNING
+[INFO   ] Alanine Scanning                                       [ 6/ 9]    DONE
+[INFO   ] Stability calculation                                          RUNNING
+[INFO   ] Stability calculation                                  [ 7/ 9]    DONE
+[INFO   ] Decomposition Analysis                                         RUNNING
+[INFO   ] Decomposition Analysis                                 [ 8/ 9]    DONE
+[INFO   ] Interaction Entropy approximation                              RUNNING
+[INFO   ] Interaction Entropy approximation                      [ 9/ 9]    DONE
+[INFO   ] Opening gmx_MMPBSA_ana...

@@ -1,0 +1,85 @@
+# Stage 1, Builder
+FROM nvidia/cuda:12.4.0-devel-ubuntu22.04 AS builder
+
+# Define build-time variables
+ARG SOFTWARE_FOLDER=/opt/software
+ARG GROMACS_VERSION=2023
+ARG UV_DIR=/opt/uv
+ARG GROMACS_INSTALL_DIR=$SOFTWARE_FOLDER/gromacs
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install core build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake gfortran flex bison wget build-essential curl ca-certificates \
+    zlib1g-dev \
+    libbz2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install UV
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=$UV_DIR sh
+ENV PATH="$UV_DIR:$PATH"
+SHELL ["/bin/bash", "-c"]
+
+# Copy local software
+ARG LOCAL_SOFTWARE_FOLDER=software
+
+COPY $LOCAL_SOFTWARE_FOLDER $SOFTWARE_FOLDER
+    
+# Install AmberTools25
+WORKDIR $SOFTWARE_FOLDER/ambertools25_src/build
+RUN ./run_cmake && make -j 4 && make install
+
+
+# Install GROMACS dependencies (updated CMake)
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.29.3/cmake-3.29.3-linux-x86_64.sh -O /tmp/cmake.sh && \
+    chmod +x /tmp/cmake.sh && \
+    /tmp/cmake.sh --skip-license --prefix=/usr/local && \
+    rm /tmp/cmake.sh
+
+
+# Download and Install GROMACS
+WORKDIR /build
+RUN wget https://ftp.gromacs.org/gromacs/gromacs-${GROMACS_VERSION}.tar.gz -O /tmp/gromacs-${GROMACS_VERSION}.tar.gz && \
+    tar xfz /tmp/gromacs-${GROMACS_VERSION}.tar.gz -C $SOFTWARE_FOLDER && \
+    rm /tmp/gromacs-${GROMACS_VERSION}.tar.gz
+
+WORKDIR $SOFTWARE_FOLDER/gromacs-${GROMACS_VERSION}/build
+
+RUN cmake .. \
+        -DGMX_GPU=CUDA \
+        -DCMAKE_INSTALL_PREFIX=${GROMACS_INSTALL_DIR} \
+        -DGMX_BUILD_OWN_FFTW=ON \
+        -DREGRESSIONTEST_DOWNLOAD=ON && \
+    make -j$(nproc) && make check && make install
+
+# Stage 2, runtime, set ups the environments, copies software from the builder
+FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04 AS runtime
+
+# Define common arguments/variables
+ARG SOFTWARE_FOLDER=/opt/software
+ARG GROMACS_INSTALL_DIR=$SOFTWARE_FOLDER/gromacs
+ARG UV_DIR=/opt/uv
+ARG AGENT_USER=beautifulagent
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    openbabel \
+    build-essential python3-dev gfortran git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder $UV_DIR $UV_DIR
+ARG AMBERTOOLS_DIR=$SOFTWARE_FOLDER/ambertools25
+ARG GROMACS_INSTALL_DIR=$SOFTWARE_FOLDER/gromacs
+
+COPY --from=builder $AMBERTOOLS_DIR $AMBERTOOLS_DIR
+COPY --from=builder $GROMACS_INSTALL_DIR $GROMACS_INSTALL_DIR
+
+# Set up environment variables for the final image
+ENV PATH="$UV_DIR:${GROMACS_INSTALL_DIR}/bin:/usr/local/bin:$PATH"
+ENV LD_LIBRARY_PATH="${GROMACS_INSTALL_DIR}/lib:/usr/local/lib:$LD_LIBRARY_PATH"
+
+# Metadata
+LABEL maintainer="liac"
+LABEL description="Molecular dynamics software: AmberTools25 + GROMACS + openbabel + UV (Final Agent Image)"
+LABEL version="0.0.1"

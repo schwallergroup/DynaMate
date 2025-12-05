@@ -1,0 +1,29 @@
+name: dynagent
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.12
+  - pip
+  - ambertools        
+  - mdanalysis        
+  - numpy=1.26.4
+  - parmed            
+  - pip:
+      - openai>=2.0.0
+      - pydantic>=2.11.9
+      - litellm==1.79.3
+      - bio>=1.8.0
+      - dotenv>=0.9.9
+      - anthropic>=0.69.0
+      - mdanalysis>=2.9.0        
+      - ruff>=0.14.0
+      - parmed>=4.3.0
+      - pdbfixer @ git+https://github.com/openmm/pdbfixer
+      - paper-qa>=5.29.1
+      - tyro>=0.9.35
+      - python-dotenv>=1.1.1
+      # dev deps:
+      - ipykernel>=6.30.1
+      - tyro>=0.9.35

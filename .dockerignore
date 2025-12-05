@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# API keys and secrets
+.env
+
+# Logger
+logs/
+
+# The sandbox
+sandbox/
+
+# vscode
+.vscode
+
+# agent logs
+agent_logs/
+
+# software 
+software/*
+# !software/ambertools25_src
