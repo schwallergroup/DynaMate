@@ -2,7 +2,7 @@
   <img src="assets/DynaMate.svg" alt="drawing" width="250"/>
 </p>
 
-DynaMate is your reliable mate that can run molecular dynamics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipt with a collection of tools. Quality checks throughout the pipeline trigger re-tries when something goes wrong, allowing the agent to correct course and save you time on debugging. 
+DynaMate is your reliable mate that can run molecular dynamics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipt with a collection of tools. Quality checks throughout the pipeline trigger re-tries when something goes wrong, allowing the agent to correct course and save you time on debugging. You can find our preprint in the `assets` folder.
 
 ### Software setup
 The tools used by the agent require that you have a local installation of the following software. We provide a Docker image with all dependencies pre-installed (recommended), or you can install everything manually if you prefer

@@ -1,4 +1,4 @@
-name: dynagent
+name: dynamate
 channels:
   - conda-forge
   - defaults
