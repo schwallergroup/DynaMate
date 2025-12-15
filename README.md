@@ -2,7 +2,7 @@
   <img src="assets/DynaMate.svg" alt="drawing" width="250"/>
 </p>
 
-DynaMate is your reliable mate that can run molecular dynamics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipt with a collection of tools. Quality checks throughout the pipeline trigger re-tries when something goes wrong, allowing the agent to correct course and save you time on debugging. You can find our preprint in the `assets` folder.
+DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipt with a collection of tools. Quality checks throughout the pipeline trigger re-tries when something goes wrong, allowing the agent to correct course and save you time on debugging. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
 
 ### Software setup
 The tools used by the agent require that you have a local installation of the following software. We provide a Docker image with all dependencies pre-installed (recommended), or you can install everything manually if you prefer
@@ -36,7 +36,7 @@ Happy molecular dynamics simulations! 🧬
 
 #### Manual Setup
 
-We recommend that you install in a separate `~/softwares` directory, **not inside the project**.:
+We recommend that you install in a separate `~/softwares` directory, **not inside the project**:
 
 ```bash
 mkdir ~/softwares
@@ -173,9 +173,9 @@ source setup.sh
 ```
 
 ## Usage
-To launch the script specify the PDB, possible ligand name, and model name in the command line arguments. For example, to launch an MD run with the protein 5UEZ, ligand 89G, and model GPT-5 mini (don't forget to specify the online status to allow the models to perform web searches):
+To launch the script specify the PDB (or upload it), possible ligand name, and model name in the command line arguments. For example, to launch the MD run with the protein 5UEZ, ligand 89G, and model GPT-5 mini:
 ```bash
-python main.py --pdb_id 5UEZ --ligand 89G --model openrouter/anthropic/claude-4.5-sonnet:online
+python main.py --pdb_id 5UEZ --ligand 89G --model openrouter/openai/gpt-5-mini
 ```
 
 And again, happy molecular dynamics simulations! 🧬
@@ -183,6 +183,17 @@ And again, happy molecular dynamics simulations! 🧬
 <p align="center">
   <img src="assets/MDAgent-Tools-workflow.png" alt="drawing" width="900"/>
 </p>
+
+### Citation
+If you found this code useful, please consider citing:
+```bibtex
+@article{guilbert2025dynamate,
+  title={DynaMate: An Autonomous Agent for Protein-Ligand Molecular Dynamics Simulations},
+  author={Guilbert, Salom{\'e} and Masschelein, Cassandra and Goumaz, Jeremy and Naida, Bohdan and Schwaller, Philippe},
+  journal={arXiv preprint arXiv:2512.10034},
+  year={2025}
+}
+```
 
 ### License
 This work is licensed under the [MIT License](https://opensource.org/license/mit)
