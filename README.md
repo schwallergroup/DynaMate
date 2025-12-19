@@ -4,10 +4,21 @@
 
 DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipt with a collection of tools. Quality checks throughout the pipeline trigger re-tries when something goes wrong, allowing the agent to correct course and save you time on debugging. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
 
-### Software setup
+## Key features
+* :rocket: Autonomous protein-ligand MD simulations and binding affinity calculations
+* :arrows_counterclockwise: Error analysis and correction
+* :bar_chart: Binding affinity calculations with MM/PB(GB)SA method
+
+## Software setup
 The tools used by the agent require that you have a local installation of the following software. We provide a Docker image with all dependencies pre-installed (recommended), or you can install everything manually if you prefer
 
-#### Docker Setup (Recommended)
+### Clone the repository
+```bash
+git clone https://github.com/schwallergroup/DynaMate.git
+cd DynaMate
+```
+
+### Docker Setup (Recommended)
 
 1. Build a docker image:
 ```
@@ -34,7 +45,7 @@ python main.py --pdb-id <pdb-id> --model <model_name>
 
 Happy molecular dynamics simulations! 🧬
 
-#### Manual Setup
+### Manual Setup
 
 We recommend that you install in a separate `~/softwares` directory, **not inside the project**:
 
@@ -43,7 +54,7 @@ mkdir ~/softwares
 cd ~/softwares
 ```
 
-### CMake
+#### 1. CMake
 You will need `cmake` locally if you don't have the module available to load directly. 
 1. Download the pre-compiled binary from the official site
 ```bash
@@ -57,7 +68,7 @@ echo 'export PATH=$HOME/cmake/bin:$PATH' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### GROMACS
+#### 2. GROMACS
 1. Download the source code. You can use `wget` or `curl`:
 
 ```bash
@@ -98,7 +109,7 @@ source /usr/local/gromacs/bin/GMXRC
 ```bash
 gmx --version
 ``` 
-### PDBFixer
+#### 3. PDBFixer
 1. Download the source file
 ```bash
 wget https://github.com/openmm/pdbfixer/archive/refs/tags/v1.11.tar.gz
@@ -118,7 +129,7 @@ pip install -e .
 python -c "import pdbfixer; print(pdbfixer.__version__)"
 ```
 
-### AmberTools25
+#### 4. AmberTools25
 Navigate [here](https://ambermd.org/GetAmber.php#ambertools) to obtain the source code in tar format. Copy this into the `~/softwares` directory.
 1. Unpack the archive
 ```bash
@@ -136,42 +147,47 @@ make install
 source /home/softwares/ambertools25/amber.sh
 ```
 
-### Conda
+#### 5. Conda
 If you don't have conda, install it
 You can use `wget` or `curl`:
 ```bash
 wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
 ```
 
-## Clone the repository
-```bash
-git clone https://github.com/schwallergroup/DynaMate.git
-cd DynaMate
-```
-
-## Environment setup
+#### 6. Environment setup
 Setup the conda env
 ```bash
 conda env create -f environment.yml
 ```
 
-## Activate your environment
+#### 7. gmx_MMPBSA environment setup
+If you wish to perform some MM/PB(GB)SA binding affinity calculations on your MD trajectiries, you need to create another environment to run gmx_MMPBSA (if not using the docker image provided). Installation instructions are available on the [gmx_MMPBSA website](https://valdes-tresanco-ms.github.io/gmx_MMPBSA/dev/installation/).
+If using conda, you can create a gmx_MMPBSA conda environment:
+```bash 
+conda env create -- file path/to/DynaMate/gmx_MMPBSA/env.yml
+```
+Then, add the path to your gmx_MMPBSA environment in `src/constants.py`:
+```bash 
+MMPBSA_ENV_DIR = Path("/path/to/miniconda3/envs/gmxMMPBSA/bin/gmx_MMPBSA")
+```
+
+#### 8. Activate your environment
 ```bash
 conda activate dynamate
 ```
 
-## Export python path so you can load the modules
+#### 9. Export python path so you can load the modules
 At the root of the project run:
 ```bash
 export PYTHONPATH=.
 ```
 
-## Run the setup script
+#### 10. Run the setup script
 After setting up your project environment, make sure to run the setup script if you don't want to load gromacs each time. This will load both the environment and the softwares
 ```bash
 source setup.sh
 ```
-
+Now you are ready to use DynaMate! 
 ## Usage
 To launch the script specify the PDB (or upload it), possible ligand name, and model name in the command line arguments. For example, to launch the MD run with the protein 5UEZ, ligand 89G, and model GPT-5 mini:
 ```bash
