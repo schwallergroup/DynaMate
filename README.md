@@ -34,7 +34,7 @@ OPENROUTER_API_KEY=your_key_here
 
 3. Run the agent:
 ```
-docker run --env-file .env dynamate --pdb-id <pdb-id> --model <model_name>
+docker run --env-file .env dynamate --pdb-id <pdb-id> --ligand <ligand-name (optional)> --model <model_name> --temp <simulation temperature (K), default: chosen by the agent> --duration <simulation duration (ns), default: chosen by the agent>
 ```
 
 4. Interactive mode (for debugging or exploration):
@@ -164,7 +164,7 @@ conda env create -f environment.yml
 If you wish to perform some MM/PB(GB)SA binding affinity calculations on your MD trajectiries, you need to create another environment to run gmx_MMPBSA (if not using the docker image provided). Installation instructions are available on the [gmx_MMPBSA website](https://valdes-tresanco-ms.github.io/gmx_MMPBSA/dev/installation/).
 If using conda, you can create a gmx_MMPBSA conda environment:
 ```bash 
-conda env create -- file path/to/DynaMate/gmx_MMPBSA/env.yml
+conda env create -f path/to/DynaMate/gmx_MMPBSA/env.yml
 ```
 Then, add the path to your gmx_MMPBSA environment in `src/constants.py`:
 ```bash 
@@ -193,6 +193,11 @@ To launch the script specify the PDB (or upload it), possible ligand name, and m
 ```bash
 python main.py --pdb_id 5UEZ --ligand 89G --model openrouter/openai/gpt-5-mini
 ```
+You can optionally specify:
+```
+--temp <simulation temperature (K), default: chosen by the agent>
+--duration <simulation duration (ns), default: chosen by the agent>
+```
 
 And again, happy molecular dynamics simulations! 🧬
 
@@ -200,7 +205,7 @@ And again, happy molecular dynamics simulations! 🧬
   <img src="assets/MDAgent-Tools-workflow.png" alt="drawing" width="900"/>
 </p>
 
-### Citation
+## Citation
 If you found this code useful, please consider citing:
 ```bibtex
 @article{guilbert2025dynamate,
@@ -211,5 +216,5 @@ If you found this code useful, please consider citing:
 }
 ```
 
-### License
+## License
 This work is licensed under the [MIT License](https://opensource.org/license/mit)
