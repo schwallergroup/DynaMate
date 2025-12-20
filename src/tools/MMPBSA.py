@@ -6,18 +6,19 @@ import parmed as pmd # type: ignore
 import sys
 import re
 import os
+from src import constants
 
-def run_gmxMMPBSA(sandbox_dir: str, pdb_id: str, nsteps:str, nstxout_compressed:str, temp=str) -> str:
+def run_gmxMMPBSA(sandbox_dir: str, pdb_id: str, nsteps:str, nstxout_compressed:str, md_temp:str) -> str:
     nframes=int(nsteps)/int(nstxout_compressed)
     os.makedirs(f"{sandbox_dir}/gmx_MMPBSA", exist_ok=True)
-    os.chdir(f"{sandbox_dir}/gmx_MMPBSA")
-    mmpbsa_infile = open('mmpbsa.in', 'w' )
+    MMPBSA_dir=f"{sandbox_dir}/gmx_MMPBSA"
+    mmpbsa_infile = open(f"{MMPBSA_dir}/mmpbsa.in", 'w' )
     mmpbsa_infile.write(f'''&general
 sys_name={pdb_id}
 startframe=1
 endframe={int(float(nframes))}
 interval=5
-temperature={int(float(temp))}
+temperature={int(float(md_temp))}
 verbose=2
 /
 &pb
@@ -68,17 +69,13 @@ verbose=2
 ''')
     mmpbsa_infile.close()
 
-    #run_gmxMMPBSA("6JJ3","10000000","5000","300")
-
     tpr_file=f"{sandbox_dir}/md.tpr"
     xtc_file=f"{sandbox_dir}/md_noPBC.xtc"
     index_file=f"{sandbox_dir}/index.ndx"
     topol_file=f"{sandbox_dir}/topol.top"
 
-    GMXMMPBSA_PATH = "/home/hackathon/miniforge3/envs/gmxMMPBSA/bin/gmx_MMPBSA"
-
     cmd = [
-        GMXMMPBSA_PATH,
+        constants.MMPBSA_ENV_DIR,
         "-O",
         "-i", "mmpbsa.in",
         "-cs", tpr_file,
@@ -91,5 +88,25 @@ verbose=2
         "-nogui"
     ]
 
-    subprocess.run(cmd, check=True)
-    return f"MMPBSA complete! Files created: {sandbox_dir}/gmx_MMPBSA/FINAL_RESULTS_MMPBSA.dat and {sandbox_dir}/gmx_MMPBSA/FINAL_RESULTS_MMPBSA.csv"
+    result = subprocess.run(cmd, cwd=MMPBSA_dir, stdout=sys.stdout, stderr=sys.stderr, text=True)
+
+    MMPBSA_output = ""
+
+    log_file_path = Path(MMPBSA_dir) / "gmx_MMPBSA.log"
+
+    if log_file_path.exists():
+        try:
+            MMPBSA_output = log_file_path.read_text(encoding="utf-8")
+        except Exception as e:
+            MMPBSA_output = f"Could not read gmx_MMPBSA log file: {e}"
+
+    if result.returncode != 0:
+        return (f"Equilibration script failed with return code {result.returncode}.\n"
+                f"--- Full gmx_MMPBSA Log ---\n"
+                f"{MMPBSA_output}\n"
+                f"--- Shell Script Stderr ---\n"
+                f"{result.stderr or 'None captured directly'}")
+    else:
+        return (f"MMPBSA complete! Files created: {MMPBSA_dir}/FINAL_RESULTS_MMPBSA.dat and {MMPBSA_dir}/FINAL_RESULTS_MMPBSA.csv."
+                f"Full gmx_MMPBSA output:\n"
+                f"{MMPBSA_output}")

@@ -342,7 +342,7 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
 
         logger.info("Atom renaming of ligand completed.")
 
-        return f"Successfully Prepared PDB structure with a ligand and saved the extracted ligand PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)."
+        return f"Successfully Prepared PDB structure with a ligand and saved the extracted ligand PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)"
 
     return f"Successfully Prepared PDB structure without a ligand and saved the extracted PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb"
 

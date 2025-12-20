@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # load your environment
-source ~/miniforge3/bin/activate dynagent
+source ~/miniforge3/bin/activate dynamate
 
 # Activate GROMACS environment
 if [ -f /usr/local/gromacs/bin/GMXRC ]; then

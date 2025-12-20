@@ -9,7 +9,7 @@ from src.agents.agent import BaseAgent
 from src.prompts import PREP_SYSTEM_PROMPT
 
 
-litellm.drop_params = True  # avoid problems with setting temp on GPT-5
+litellm.drop_params = True
 
 
 class Tool(BaseModel):
@@ -26,10 +26,19 @@ class PrepAgent(BaseAgent):
         sandbox_dir,
         pdb_id=None,
         ligand_name=None,
+        md_temp=None,
+        md_duration=None,
         model_supports_system_messages=True,
     ):
         super().__init__(
-            model_name, temperature, sandbox_dir, pdb_id, ligand_name, model_supports_system_messages
+            model_name,
+            temperature,
+            sandbox_dir,
+            pdb_id,
+            ligand_name,
+            md_temp,
+            md_duration,
+            model_supports_system_messages
         )
 
         self.messages: List[Dict[str, Any]] = []
@@ -122,7 +131,7 @@ class PrepAgent(BaseAgent):
                     sys.exit(1)
 
     def _find_simulation_temperature(self):
-        temperature = None
+        temperature = self.md_temp
 
         while temperature is None:
             user_input = "Please pick a suitable temperature (in Kelvins) for running the molecular dynamics simulation. Also provide a rational for why you selected this temperature."
@@ -146,7 +155,7 @@ class PrepAgent(BaseAgent):
         return temperature
 
     def _calculate_duration(self):
-        duration = None
+        duration = self.md_duration
 
         while duration is None:
             user_input = "Please pick a suitable simulation duration (in nanoseconds) for running a short molecular dynamics of this system. Also provide a rational for why you selected this duration. Note that dynamics simulations of 10 ns take 1 hour to complete, so keep the experiment brief (less than 1 ns duration)."
@@ -218,18 +227,20 @@ class PrepAgent(BaseAgent):
         prompt = f"I would like to run molecular dynamics for the system {user_input}. If a PDB has not been uploaded, use the tools available to fetch and prepare the PDB for {user_input}."
         self.logger.info(f"User input: {prompt}")
         self.pdb_file_path = self._get_pdb_file_path(prompt)
-        self.logger.info(f"Thank you, I now have access to the structure information for protein {self.pdb_file_path}")
+        self.logger.info(f"I now have access to the structure information for protein {self.pdb_file_path}")
 
         self._find_ligand()
 
-        temperature = self._find_simulation_temperature()
-        self.logger.info(f"Using simulation temperature: {temperature} K")
+        if self.md_temp is None:
+            self.md_temp = self._find_simulation_temperature()
+        self.logger.info(f"Using simulation temperature: {self.md_temp} K")
 
-        duration = self._calculate_duration()
-        self.logger.info(f"Using simulation duration: {duration} ns")
+        if self.md_duration is None:
+            self.md_duration = self._calculate_duration()
+        self.logger.info(f"Using simulation duration: {self.md_duration} ns")
 
         # Build plan steps depending on ligand
-        plan = self._generate_plan(temperature, duration)
+        plan = self._generate_plan(self.md_temp, self.md_duration)
         self.agent_plan = json.dumps(plan, indent=2)
         self.logger.info(f"Generated plan: {self.agent_plan}")
 

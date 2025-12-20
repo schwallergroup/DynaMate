@@ -15,3 +15,5 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "sandbox"
 
 AGENT_LOGS = Path(__file__).resolve().parent.parent / "agent_logs"
 JSON_LOG_FILE = AGENT_LOGS / "agent_runs.jsonl"
+
+MMPBSA_ENV_DIR = Path("/path/to/your/envs/mmpbsa")

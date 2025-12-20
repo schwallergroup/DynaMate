@@ -28,6 +28,8 @@ class BaseAgent(ABC):
         sandbox_dir: str,
         pdb_id: str | None = None,
         ligand_name: str | None = None,
+        md_temp: float | None = None,
+        md_duration: float | None = None,
         model_supports_system_messages: bool = True,
     ):
         self.model_name = model_name
@@ -35,6 +37,8 @@ class BaseAgent(ABC):
         self.sandbox_dir = Path(sandbox_dir)
         self.pdb_id = pdb_id
         self.ligand_name = ligand_name
+        self.md_temp = md_temp
+        self.md_duration = md_duration
 
         self.model_supports_system_messages = model_supports_system_messages
 
@@ -66,7 +70,6 @@ class BaseAgent(ABC):
         if not messages:
             return []
 
-        # Start from the end
         block = []
         i = len(messages) - 1
 
@@ -77,11 +80,7 @@ class BaseAgent(ABC):
             role = m.get("role")
 
             # Stop conditions for different last-message types:
-
-            # 1. If the last message is a 'tool' message, we must also include the
-            #    assistant tool call that triggered it.
             if role == "tool":
-                # include until we find the matching assistant tool call
                 i -= 1
                 while i >= 0 and messages[i].get("role") != "assistant":
                     block.insert(0, messages[i])
@@ -89,22 +88,13 @@ class BaseAgent(ABC):
                 if i >= 0:
                     block.insert(0, messages[i])
                 return block
-
-            # 2. If last message is assistant tool call (function call),
-            #    we keep only that one so the model knows what it's continuing.
             if role == "assistant" and m.get("tool_calls"):
                 return block
-
-            # 3. If the last message is a normal assistant message,
-            #    keep it and the preceding user message.
             if role == "assistant":
-                # include the previous user message
                 if i - 1 >= 0 and messages[i-1].get("role") == "user":
                     block.insert(0, messages[i-1])
                 return block
 
-            # 4. If the last message is a user message,
-            #    include previous assistant message.
             if role == "user":
                 if i - 1 >= 0 and messages[i-1].get("role") == "assistant":
                     block.insert(0, messages[i-1])
@@ -168,7 +158,6 @@ class BaseAgent(ABC):
 
         tool_output = None
 
-        # try:
         self._validate_tool_path(tool_input)
         func = TOOL_MAP.get(tool_name)
 
@@ -179,15 +168,6 @@ class BaseAgent(ABC):
         passed = self._additional_check_for_errors_tool_output(tool_name, tool_output)
 
         return {"ok": passed, "output": tool_output}
-        # except Exception as e:
-        #     tb = traceback.format_exc()
-        #     error_msg = (
-        #         f"Tool '{tool_name}' failed with exception:\n{e}\n\n"
-        #         f"Traceback:\n{tb}\n"
-        #         "Decide whether to retry, fix the issue, or skip this step."
-        #     )
-        #     self.logger.error(error_msg)
-        #     return {"ok": False, "output": error_msg}
 
 
     def _format_tool_usage_ouput(self, id_, tool_name, arguments, output):
@@ -203,7 +183,7 @@ class BaseAgent(ABC):
         def to_dict_safe(msg):
             if isinstance(msg, dict):
                 return msg
-            elif hasattr(msg, "model_dump"):  # Pydantic/LiteLLM object
+            elif hasattr(msg, "model_dump"):
                 return msg.model_dump()
             else:
                 return str(msg)

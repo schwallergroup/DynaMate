@@ -7,7 +7,7 @@ from src.agents.agent import BaseAgent, ToolOutputError
 from src.prompts import MD_SYSTEM_PROMPT
 from src.tools import tool_schema
 
-litellm.drop_params = True  # avoid problems with setting temp on GPT-5
+litellm.drop_params = True 
 
 
 class MDAgent(BaseAgent):
@@ -31,11 +31,20 @@ class MDAgent(BaseAgent):
         structure_path,
         pdb_id=None,
         ligand_name=None,
+        md_temp=None,
+        md_duration=None,
         model_supports_system_messages=True,
         plan: Dict[str, Any] = None,
     ):
         super().__init__(
-            model_name, temperature, sandbox_dir, pdb_id, ligand_name, model_supports_system_messages
+            model_name,
+            temperature,
+            sandbox_dir,
+            pdb_id,
+            ligand_name,
+            md_temp,
+            md_duration,
+            model_supports_system_messages
         )
 
         self.structure_path = Path(structure_path)
@@ -249,7 +258,7 @@ class MDAgent(BaseAgent):
         success = self._pipeline_successful()
 
         if self.ligand_name and success:
-            user_prompt = "Would you like me to calculate the free energy of binding for your protein-ligand system using the MMPBSA tool? (yes/no) \n"
+            user_prompt = "\n==========\nWould you like me to calculate the free energy of binding for your protein-ligand system using the MMPBSA tool? (yes/no) \n\n"
 
             user_answer = input(user_prompt).strip().lower()
 

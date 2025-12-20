@@ -38,15 +38,15 @@ TOOL_MAP = {
     ),
     # GROMACS-related
     "gromacs_equil": lambda s, i: gromacs_equil(
-        s.sandbox_dir, i["input_gro"], ligand_name=i.get("ligand_name"), ligand_file=i.get("ligand_file")
+        s.sandbox_dir, i["input_gro"], i["md_temp"], ligand_name=i.get("ligand_name"), ligand_file=i.get("ligand_file")
     ),
     "gromacs_production": lambda s, i: gromacs_production(
-        s.sandbox_dir, i["input_gro"], i["npt_cpt_file"], ligand_name=i.get("ligand_name")
+        s.sandbox_dir, i["input_gro"], i["npt_cpt_file"], i["md_temp"], i["md_duration"], ligand_name=i.get("ligand_name")
     ),
     "gromacs_analysis": lambda s, i: gromacs_analysis(s.sandbox_dir, i["input_xtc"], ligand_name=i.get("ligand_name")),
     # MMPBSA-related
     "run_gmxMMPBSA": lambda s, i: run_gmxMMPBSA(
-        s.sandbox_dir, i["pdb_id"], i["nsteps"], i["nstxout_compressed"], i["temp"],
+        s.sandbox_dir, i["pdb_id"], i["nsteps"], i["nstxout_compressed"], i["md_temp"],
     ),
     # # RAG tools
     "search_papers": lambda _, i: search_papers(i["query"]),

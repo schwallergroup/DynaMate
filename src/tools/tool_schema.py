@@ -251,12 +251,6 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                             "This file must exist in the provided sandbox_dir ({sandbox_dir})."
                         ),
                     },
-                    # "charge_ligand": {
-                    #     "type": ["integer", "null"],
-                    #     "description": (
-                    #         "The net charge of the ligand. If not provided, the charge will be calculated from the structure."
-                    #     ),
-                    # },
                     "ligand_name": {
                         "type": "string",
                         "description": (
@@ -363,6 +357,12 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                             "This file must be located within sandbox_dir."
                         ),
                     },
+                    "md_temp": {
+                        "type": "string",
+                        "description": (
+                            "Temperature in Kelvin for the MD simulation."
+                        ),
+                    },
                     "ligand_name": {
                         "type": "string",
                         "description": (
@@ -378,7 +378,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         ),
                     },
                 },
-                "required": ["sandbox_dir", "input_gro"],
+                "required": ["sandbox_dir", "input_gro", "md_temp"],
             },
         ),
         Tool(
@@ -416,6 +416,18 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                             "Must be located within sandbox_dir."
                         ),
                     },
+                    "md_temp": {
+                        "type": "string",
+                        "description": (
+                            "Temperature in Kelvin for the MD simulation."
+                        ),
+                    },
+                    "md_duration": {
+                        "type": "string",
+                        "description": (
+                            "Duration of the MD simulation in nanoseconds."
+                        ),
+                    },
                     "ligand_name": {
                         "type": "string",
                         "description": (
@@ -423,7 +435,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         ),
                     }
                 },
-                "required": ["sandbox_dir", "input_gro", "npt_cpt_file"],
+                "required": ["sandbox_dir", "input_gro", "npt_cpt_file", "md_temp", "md_duration"],
             },
         ),
         Tool(
@@ -502,12 +514,12 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "type": ["string"],
                         "description": ("Number of MD steps that elapse between writing position coordinates using lossy compression, found in the md.mdp file located in sandbox_dir."),
                     },
-                    "temp": {
+                    "md_temp": {
                         "type": ["string"],
                         "description": ("Temperature used during the MD simulation, found in the md.mdp file located in sandbox_dir. This value is an integer with base 10."),
                     },
                 },
-                "required": ["sandbox_dir", "pdb_id", "nsteps", "nstxout_compressed", "temp"],
+                "required": ["sandbox_dir", "pdb_id", "nsteps", "nstxout_compressed", "md_temp"],
             },
         ),
         Tool(
