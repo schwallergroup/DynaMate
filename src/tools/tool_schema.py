@@ -243,12 +243,17 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "type": "string",
                         "description": f"The directory path where input files are located and output files are produced (this is the sandbox directory): {sandbox_dir}",
                     },
-                    "ligand_file": {
-                        "type": "string",
+                    "ligand_files": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
                         "description": (
-                            f"Input PDB file of the protonated ligand to be parameterized (without full path). "
-                            f"The ligand file is named {ligand_name}_h.pdb if previously protonated with the prepare_pdb_file_ligand tool."
-                            "This file must exist in the provided sandbox_dir ({sandbox_dir})."
+                            "List of input PDB file(s) of the protonated ligand(s) to be parameterized "
+                            "(without full path). If there is only one ligand, provide a list with one element, "
+                            f"e.g. ['{ligand_name}_h.pdb']. If there are multiple ligands, provide a list such as "
+                            f"['{ligand_name}_h_1.pdb', '{ligand_name}_h_2.pdb'] where the ligands are indexed starting at 1. "
+                            f"All files must exist in the sandbox directory ({sandbox_dir})."
                         ),
                     },
                     "ligand_name": {
@@ -258,7 +263,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         ),
                     },
                 },
-                "required": ["sandbox_dir", "ligand_file", "ligand_name"],
+                "required": ["sandbox_dir", "ligand_files", "ligand_name"],
             },
         ),
         Tool(
@@ -298,12 +303,17 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "type": "string",
                         "description": (f"The PDB ID of the structure to be prepared: {pdb_id}. "),
                     },
-                    "ligand_file": {
-                        "type": "string",
+                    "ligand_files": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
                         "description": (
-                            f"Input PDB file of the ligand to be merged with the protein (without full path). "
-                            f"The ligand file is named {ligand_name}_h.pdb if previously protonated with the prepare_pdb_file_ligand tool."
-                            "This file must exist in the provided sandbox_dir."
+                            "List of input PDB file(s) of the protonated ligand(s) to be parameterized "
+                            "(without full path). If there is only one ligand, provide a list with one element, "
+                            f"e.g. ['{ligand_name}_h.pdb']. If there are multiple ligands, provide a list such as "
+                            f"['{ligand_name}_h_1.pdb', '{ligand_name}_h_2.pdb'] where the ligands are indexed starting at 1. "
+                            f"All files must exist in the sandbox directory ({sandbox_dir})."
                         ),
                     },
                     "ligand_name": {
@@ -313,13 +323,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         ),
                     },
                 },
-                "required": [
-                    "sandbox_dir",
-                    "input_pdb",
-                    "pdb_id",
-                    "ligand_file",
-                    "ligand_name",
-                ],
+                "required": ["sandbox_dir", "input_pdb", "pdb_id", "ligand_files", "ligand_name"],
             },
         ),
         Tool(
@@ -369,12 +373,17 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                             "Three-character residue name of the ligand (capital letters or numbers). If no ligand was provided by user, do not input this argument."
                         ),
                     },
-                    "ligand_file": {
-                        "type": "string",
+                    "ligand_files": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
                         "description": (
-                            "Optional argument for the input PDB file of the ligand to be merged with the protein (without full path). "
-                            "The ligand file is typically named '<ligand_name>_h.pdb' if previously protonated. "
-                            "If no ligand was provided by user, do not input this argument."
+                             "List of input PDB file(s) of the protonated ligand(s) to be parameterized "
+                            "(without full path). If there is only one ligand, provide a list with one element, "
+                            f"e.g. ['{ligand_name}_h.pdb']. If there are multiple ligands, provide a list such as "
+                            f"['{ligand_name}_h_1.pdb', '{ligand_name}_h_2.pdb']. "
+                            f"All files must exist in the sandbox directory ({sandbox_dir})."
                         ),
                     },
                 },

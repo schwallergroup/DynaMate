@@ -30,15 +30,15 @@ TOOL_MAP = {
     "add_caps": lambda s, i: add_caps(s.sandbox_dir, i["input_pdb"], i["pdb_id"]),
     "rename_histidines": lambda s, i: rename_histidines(s.sandbox_dir, i["input_pdb"], i["pdb_id"]),
     # Ligand handling
-    "param_ligand": lambda s, i: param_ligand(s.sandbox_dir, i["ligand_file"], i["ligand_name"]),
+    "param_ligand": lambda s, i: param_ligand(s.sandbox_dir, i["ligand_files"] if isinstance(i["ligand_files"], list) else [i["ligand_files"]], i["ligand_name"]),
     # AMBER-related
     "run_tleap": lambda s, i: run_tleap(s.sandbox_dir, i["input_pdb"], i["pdb_id"]),
     "run_tleap_ligand": lambda s, i: run_tleap_ligand(
-        s.sandbox_dir, i["input_pdb"], i["pdb_id"], i["ligand_file"], i["ligand_name"]
+        s.sandbox_dir, i["input_pdb"], i["pdb_id"], i["ligand_files"] if isinstance(i["ligand_files"], list) else [i["ligand_files"]], i["ligand_name"]
     ),
     # GROMACS-related
     "gromacs_equil": lambda s, i: gromacs_equil(
-        s.sandbox_dir, i["input_gro"], i["md_temp"], ligand_name=i.get("ligand_name"), ligand_file=i.get("ligand_file")
+        s.sandbox_dir, i["input_gro"], i["md_temp"], ligand_name=i.get("ligand_name"), ligand_files=i.get("ligand_files")
     ),
     "gromacs_production": lambda s, i: gromacs_production(
         s.sandbox_dir, i["input_gro"], i["npt_cpt_file"], i["md_temp"], i["md_duration"], ligand_name=i.get("ligand_name")

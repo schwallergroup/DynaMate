@@ -83,81 +83,48 @@ def fetch_and_save_pdb(sandbox_dir: str, pdb_id: str, output_pdb: str) -> str:
     except Exception:
         return f"Error fetching PDB {pdb_id}: {traceback.format_exc()}"
 
-
-def prepare_pdb_file_ligand_old(sandbox_dir: str, pdb_id: str, ligand_name: str = None) -> str:
+def check_pdb_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = None) -> str:
     """
-    Takes input PDB file, extract ligand to ligand_name.pdb.
-    Removes HETATM, CONECT and MASTER lines from input_pdb and saves to prepared_pdb.
-    Protonates ligand and pH=7 and saves to ligand_name_h.pdb.
+    This is a publically available API that checks if a PDB file is valid by attempting to parse it with Bio.PDB.PDBParser.
+
     Args:
-        input_pdb (str): The path where the input PDB file is located.
-        prepared_pdb (str): The path where we save the prepared PDB file.
-        ligand_name (str): The name of the ligand to extract.
-        ligand_pdb (str): The path where we save the extracted ligand PDB file.
-        ligand_pdb_h (str): The path where we save the protonated ligand PDB file.
+        pdb_id (str): The 4-character PDB ID (e.g., '1abc').
+        ligand_name (str): Optional: the name of the ligand if a protein-ligand complex should be simulated.
     """
-    # Extract ligand
-    if (ligand_name is not None) and (ligand_name != "XXX") and (ligand_name != "None") and (ligand_name != "None_h"):
-        with (
-            open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile,
-            open(f"{sandbox_dir}/{ligand_name}.pdb", "w") as outfile,
-        ):
-            for line in infile:
-                if line.startswith("HETATM") and ligand_name in line:
-                    new_line = line.replace("UNL", ligand_name)
-                    outfile.write(new_line)
+    pdb_file = sandbox_dir / f"{pdb_id}.pdb"
 
-    # Prepare PDB
-    with (
-        open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile,
-        open(f"{sandbox_dir}/{pdb_id}_prepared.pdb", "w") as outfile,
-    ):
-        for line in infile:
-            if not (line.startswith("HETATM") or line.startswith("CONECT") or line.startswith("MASTER")):
-                outfile.write(line)
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
+        # Check if ligand is present in the PDB file
+        with open(pdb_file, "r") as f:
+            lines = f.readlines()
+            ligand_present = any(line.startswith("HETATM") and ligand_name in line for line in lines)
 
-    # Protonate ligand
-    if (ligand_name is not None) and (ligand_name != "XXX") and (ligand_name != "None") and (ligand_name != "None_h"):
-        cmd = shlex.split(f"obabel {sandbox_dir}/{ligand_name}.pdb -O {sandbox_dir}/{ligand_name}_h.pdb -p7")
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        with open(f"{sandbox_dir}/{ligand_name}_h.pdb", "r") as infile:
-            lines = infile.readlines()
-            filtered_lines = [line for line in lines if not (line.startswith("CONECT") or line.startswith("MASTER"))]
-            new_filtered_lines = [line.replace("UNL", ligand_name) for line in filtered_lines]
-        with open(f"{sandbox_dir}/{ligand_name}_h.pdb", "w") as outfile:
-            outfile.writelines(new_filtered_lines)
+        if not ligand_present:
+            logger.info(f"Ligand {ligand_name} not found in PDB file {pdb_file}.")
+            raise NoLigand(f"Ligand {ligand_name} not found in PDB file {pdb_file}.")
+            
+        #Check if ligand is covalent
+        with open(pdb_file, "r") as f:
+            lines = f.readlines()
+            ligand_covalent = any(line.startswith("LINK") and ligand_name in line for line in lines)
+        
+        if ligand_covalent:
+            logger.info(f"Ligand {ligand_name} appears to be covalently bound in PDB file {pdb_file}. DynaMate doesn't support the parameterization of covalently bound ligands. This system cannot be processed.")
+            raise NoLigand(f"Ligand {ligand_name} appears to be covalently bound in PDB file {pdb_file}. DynaMate doesn't support the parameterization of covalently bound ligands. This system cannot be processed.")
 
-        # Rewrite hydrogen, and other atoms if needed, names in the ligand
+        # Count number of ligands
+        with open(pdb_file, "r") as f:
+            lines = f.readlines()
+            ligand_count = sum(1 for line in lines if line.startswith("HET ") and ligand_name in line)
+            logger.info(f"There is(are) {ligand_count} ligand(s) called {ligand_name} in {pdb_file}.")
 
-        with open(f"{sandbox_dir}/{ligand_name}_h.pdb", "r") as infile:
-            lines = infile.readlines()
+    # Check for modified residues
+    with open(pdb_file, "r") as f:
+        lines = f.readlines()
+        modified_residues = [line for line in lines if line.startswith("MODRES")]
+        logger.info("There are ", len(modified_residues), "modified residues, which are", modified_residues, ". This should be checked and the corresponding residues modified to standard residues. If they can't be modified to standard residues, the system can't be processed.")
 
-        counters = defaultdict(int)
-        new_lines = []
-
-        for line in lines:
-            # Only modify atom records
-            if line.startswith(("HETATM", "ATOM")):
-                atom_name = line[12:16].strip()
-                element = line[76:78].strip()
-
-                # Only rename if atom_name is the same as the element (e.g. "C", "N", "H")
-                if atom_name == element and element.isalpha():
-                    counters[element] += 1
-                    new_name = f"{element}{counters[element]}"
-                    # Reinsert new name in the proper 4-character PDB field
-                    line = f"{line[:12]}{new_name:>4}{line[16:]}"
-            new_lines.append(line)
-
-        with open(f"{sandbox_dir}/{ligand_name}_h.pdb", "w") as outfile:
-            outfile.writelines(new_lines)
-
-        logger.info(f"Generic atoms renamed successfully. Output saved to {sandbox_dir}/{ligand_name}_h.pdb")
-
-        return f"Successfully Prepared PDB structure with a ligand and saved the extracted ligand PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb"
-
-    return f"Successfully Prepared PDB structure without a ligand and saved the extracted PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb"
-
+    return "PDB file check completed successfully."
 
 def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = None) -> str:
     """
@@ -171,17 +138,6 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
         ligand_pdb (str): The path where we save the extracted ligand PDB file.
         ligand_pdb_h (str): The path where we save the protonated ligand PDB file.
     """
-    # Extract ligand
-    if (ligand_name is not None) and (ligand_name != "XXX") and (ligand_name != "None") and (ligand_name != "None_h"):
-        with (
-            open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile,
-            open(f"{sandbox_dir}/{ligand_name}.pdb", "w") as outfile,
-        ):
-            for line in infile:
-                if line.startswith("HETATM") and ligand_name in line:
-                    new_line = line.replace("UNL", ligand_name)
-                    outfile.write(new_line)
-
     # Prepare PDB
     with (
         open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile,
@@ -190,17 +146,74 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
         for line in infile:
             if not (line.startswith("HETATM") or line.startswith("CONECT") or line.startswith("MASTER")):
                 outfile.write(line)
+    logger.info(f"Prepared PDB file saved to {sandbox_dir}/{pdb_id}_prepared.pdb")
+
+    # Extract ligand
+    if (ligand_name is not None) and (ligand_name != "XXX") and (ligand_name != "None") and (ligand_name != "None_h"):
+        # Count number of ligands
+        resnums = set()
+        with open(f"{sandbox_dir}/{pdb_id}.pdb") as f:
+            for line in f:
+                if line.startswith("HETATM") and ligand_name in line:
+                    resnum = int(line[22:26])
+                    resnums.add(resnum)
+        print("resnums is: ", resnums)
+        num_ligands = len(resnums)
+        logger.info(f"IMPORTANT: Number of ligands {ligand_name} found: {num_ligands}")
+
+        if num_ligands == 0:
+            logger.info(f"Ligand {ligand_name} not found in PDB file {sandbox_dir}/{pdb_id}.pdb. You can either proceed without a ligand, check the ligand name provided or check the PDB file.")
+            return f"Ligand {ligand_name} not found in PDB file {sandbox_dir}/{pdb_id}.pdb. You can either proceed without a ligand, check the ligand name provided or check the PDB file"
+
+        # CASE 1: only one ligand
+        if num_ligands == 1:
+            ligand_pdb_file = f"{sandbox_dir}/{ligand_name}.pdb"
+            ligand_pdb_files_list = [ligand_pdb_file]
+            with open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile, open(ligand_pdb_file, "w") as outfile:
+                for line in infile:
+                    if line.startswith("HETATM") and ligand_name in line:
+                        outfile.write(line)
+            logger.info(f"Extracted ligand {ligand_name} to {ligand_pdb_file}")
+        
+        # CASE 2: multiple ligands (split by residue number)
+        else:
+            ligand_pdb_files_list = []
+            ligands = defaultdict(list)
+
+            # Collect HETATM lines by residue number
+            with open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile:
+                for line in infile:
+                    if line.startswith("HETATM") and ligand_name in line:
+                        resnum = int(line[22:26])  # residue number column
+                        ligands[resnum].append(line)
+
+            # Write one file per ligand
+            for i, (resnum, atom_lines) in enumerate(ligands.items(), start=1):
+                ligand_pdb_file = f"{sandbox_dir}/{ligand_name}_{i}.pdb"
+                ligand_pdb_files_list.append(ligand_pdb_file)
+                with open(ligand_pdb_file, "w") as outfile:
+                    outfile.writelines(atom_lines)
+                logger.info(f"Extracted ligand {ligand_name} residue {resnum} to {ligand_pdb_file}")
 
     # Protonate ligand
+    list_protonated_files = []
     if (ligand_name is not None) and (ligand_name != "XXX") and (ligand_name != "None") and (ligand_name != "None_h"):
-        cmd = shlex.split(f"obabel {sandbox_dir}/{ligand_name}.pdb -O {sandbox_dir}/{ligand_name}_h.pdb -p7")
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        with open(f"{sandbox_dir}/{ligand_name}_h.pdb", "r") as infile:
-            lines = infile.readlines()
-            filtered_lines = [line for line in lines if not (line.startswith("CONECT") or line.startswith("MASTER"))]
-            new_filtered_lines = [line.replace("UNL", ligand_name) for line in filtered_lines]
-        with open(f"{sandbox_dir}/{ligand_name}_h.pdb", "w") as outfile:
-            outfile.writelines(new_filtered_lines)
+        for ligand_pdb_file in ligand_pdb_files_list: # loop over all extracted ligands
+            if num_ligands == 1:
+                protonated_file = f"{sandbox_dir}/{ligand_name}_h.pdb"
+            else:
+                index = ligand_pdb_file.split("_")[-1].split(".")[0]  # get index from filename
+                protonated_file = f"{sandbox_dir}/{ligand_name}_{index}_h.pdb"
+                list_protonated_files.append(f"{ligand_name}_{index}_h.pdb")
+            
+            cmd = shlex.split(f"obabel {ligand_pdb_file} -O {protonated_file} -p7")
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            with open(protonated_file, "r") as infile:
+                lines = infile.readlines()
+                filtered_lines = [line for line in lines if not (line.startswith("CONECT") or line.startswith("MASTER"))]
+                new_filtered_lines = [line.replace("UNL", ligand_name) for line in filtered_lines]
+            with open(protonated_file, "w") as outfile:
+                outfile.writelines(new_filtered_lines)
 
         # Rewrite atoms names in the ligand
         ELEMENTS = {
@@ -304,10 +317,7 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
                 return e[0] + e[1].lower()
             return e
 
-        input_file = f"{sandbox_dir}/{ligand_name}_h.pdb"
-        output_file = f"{sandbox_dir}/{ligand_name}_h.pdb"
-
-        with open(input_file, "r") as infile:
+        with open(protonated_file, "r") as infile:
             lines = infile.readlines()
 
         counters = defaultdict(int)
@@ -337,12 +347,16 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
 
             new_lines.append(line)
 
-        with open(output_file, "w") as outfile:
+        with open(protonated_file, "w") as outfile:
             outfile.writelines(new_lines)
 
         logger.info("Atom renaming of ligand completed.")
 
-        return f"Successfully Prepared PDB structure with a ligand and saved the extracted ligand PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)"
+        if num_ligands == 1:
+            return f"Successfully Prepared PDB structure with a ligand and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)"
+        if num_ligands > 1:
+            return f"Successfully Prepared PDB structure with {num_ligands} ligands and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}.pdb and the {num_ligands} protonated ligand PDB files to {sandbox_dir}/{list_protonated_files}. This list of {num_ligands} protonated files: {list_protonated_files} is IMPORTANT and should be the input parameter for future functions. The extracted pdb file was saved to {sandbox_dir}/{pdb_id}_prepared.pdb Ligands were protonated at pH=7 and atom names were cleaned (renumbered)"
+
 
     return f"Successfully Prepared PDB structure without a ligand and saved the extracted PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb"
 
@@ -357,6 +371,12 @@ def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
         pdb_id (str): The PDB ID.
         sandbox_dir (str): the directory where we add and modify files.
     """
+    with open(f"{sandbox_dir}/{input_pdb}") as pdbfile:
+        for line in pdbfile:
+            if line.startswith("HETATM") or line.startswith("CONECT") or line.startswith("MASTER"):
+                pdbfile.close()
+                logger.warning("Input PDB file contains HETATM, CONECT or MASTER lines. Please prepare the PDB file first to remove these lines. If the PDB file has already been prepared with the prepare_pdb_file_ligand function, use the correct parameters when calling this tool or check that it has been prepared correctly.")
+                return "Error: Input PDB file contains HETATM, CONECT or MASTER lines. Please prepare the PDB file first to remove these lines. If the PDB file has already been prepared with the prepare_pdb_file_ligand function, use the correct parameters when calling this tool or check that it has been prepared correctly."    
 
     def create_universe(n_atoms, name, resname, positions, resids, segid):
         u_new = mda.Universe.empty(

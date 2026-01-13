@@ -9,12 +9,14 @@ import time
 
 logger = get_class_logger(__name__)
 
-def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_file=None) -> str:
+def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_files=None) -> str:
     # sometimes llm passes ligands as empty strings
     if not ligand_name:
         ligand_name = None
-    if not ligand_file:
+    if not ligand_files:
         ligand_file = None
+    else:
+        ligand_file=ligand_files[0]
         
     # ------------ Modify topol.top to include position restraints ------------
 

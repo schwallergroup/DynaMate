@@ -2,13 +2,13 @@
 # Usage: ./run_tleap.sh input.pdb
 
 if [ $# -ne 4 ]; then
-    echo "Usage: $0 sandbox_dir complex_pdb ligand_name prepi_file"
+    echo "Usage: $0 sandbox_dir complex_pdb frcmod_file prepi_file"
     exit 1
 fi
 
 SANDBOX_DIR=$1 # PDBFILE already has sandbox path
 PDBFILE=$2
-LIGNAME=$3
+FRCMOD_FILE=$3
 PREPI_FILE=$4
 
 # Create tleap input file
@@ -22,7 +22,7 @@ addPdbAtomMap { { "CH3"  "C" } { "HH31" "H1" } { "HH32" "H2" } { "HH33" "H3" } {
 
 # Load ligand parameters
 loadamberprep ${SANDBOX_DIR}/${PREPI_FILE}
-loadamberparams ${SANDBOX_DIR}/${LIGNAME}.frcmod
+loadamberparams ${SANDBOX_DIR}/${FRCMOD_FILE}
 
 # PDBFILE already has sandbox path
 mol = loadpdb ${PDBFILE}

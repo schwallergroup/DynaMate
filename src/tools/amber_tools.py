@@ -34,23 +34,29 @@ def run_tleap(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
         return f"tleap ran successfully with output: {result.stdout}. \n New files added: {sandbox_dir}/topol.top, {sandbox_dir}/{pdb_id}.gro"
 
 
-def run_tleap_ligand(sandbox_dir: str, input_pdb: str, pdb_id: str, ligand_file: str, ligand_name: str) -> str:
+def run_tleap_ligand(sandbox_dir: str, input_pdb: str, pdb_id: str, ligand_files: str | list[str], ligand_name: str) -> str:
     """
     Run tleap preparation using run_tleap.sh, for a protein-ligand complex.
     """
+    # make sure it's a list
+    if isinstance(ligand_files, str):
+        ligand_files = [ligand_files]
+    else:
+        ligand_files = ligand_files
     # complex.pdb
     with (
         open(f"{sandbox_dir}/{input_pdb}", "r") as pdb_infile,
-        open(f"{sandbox_dir}/{ligand_file}", "r") as ligand_infile,
         open(f"{sandbox_dir}/complex.pdb", "w") as outfile,
     ):
         for line in pdb_infile:
             if not line.startswith("END"):
                 outfile.write(line)
 
-        for line in ligand_infile:
-            if line.startswith("HETATM"):
-                outfile.write(line)
+        with open(f"{sandbox_dir}/{ligand_files[0]}", "r") as ligand_infile:
+            for line in ligand_infile:
+                if line.startswith("HETATM"):
+                    outfile.write(line)
+            logger.info(f"Only the first ligand {ligand_files[0]} was added to complex.pdb as we will only simulate one ligand.")
 
         outfile.write("TER\n")
         outfile.write("END\n")
@@ -59,13 +65,14 @@ def run_tleap_ligand(sandbox_dir: str, input_pdb: str, pdb_id: str, ligand_file:
     # tleap with ligand
     script = constants.SCRIPTS_DIR / "run_tleap_ligand.sh"
 
-    if Path(f"{sandbox_dir}/{ligand_name}_fixed.prepi").exists():
-        prepi_file = f"{ligand_name}_fixed.prepi"
+    ligand_stem=Path(f"{ligand_files[0]}").stem
+    if Path(f"{sandbox_dir}/{ligand_stem}_fixed.prepi").exists():
+        prepi_file = f"{ligand_stem}_fixed.prepi"
     else:
-        prepi_file = f"{ligand_name}.prepi"
+        prepi_file = f"{ligand_stem}.prepi"
 
     result = subprocess.run(
-        [str(script), sandbox_dir, complex_pdb, ligand_name, prepi_file],
+        [str(script), sandbox_dir, complex_pdb, f"{ligand_stem}.frcmod", prepi_file],
         cwd=sandbox_dir,
         capture_output=True,
         text=True,
