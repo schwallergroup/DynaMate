@@ -211,7 +211,7 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
             with open(protonated_file, "r") as infile:
                 lines = infile.readlines()
                 filtered_lines = [line for line in lines if not (line.startswith("CONECT") or line.startswith("MASTER"))]
-                new_filtered_lines = [line.replace("UNL", ligand_name) for line in filtered_lines]
+                new_filtered_lines = [line.replace("UNL", ligand_name).replace("UNK", ligand_name) for line in filtered_lines]
             with open(protonated_file, "w") as outfile:
                 outfile.writelines(new_filtered_lines)
 
