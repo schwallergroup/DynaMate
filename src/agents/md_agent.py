@@ -52,7 +52,71 @@ class MDAgent(BaseAgent):
 
         self.completed_steps = []
         self.completed_summary = ""
-        self.EXPECTED_FILES = ["md.tpr", "md.xtc", "md.edr", "md.log", "md.gro"]
+        self.EXPECTED_FILES_PROTEIN_TEMPLATE = [
+            "{pdb_id}.pdb",
+            "{pdb_id}_prepared.pdb",
+            "{pdb_id}_prepared_capped.pdb",
+            "{pdb_id}_prepared_capped_his.pdb",
+            "{pdb_id}.prmtop",
+            "{pdb_id}.inpcrd",
+            "{pdb_id}_tleap.pdb",
+            "topol.top",
+            "{pdb_id}.gro",
+            "topol_without_posre.top",
+            "em.gro",
+            "nvt.gro",
+            "nvt.xtc",
+            "npt.gro",
+            "npt.xtc",
+            "temperature.xvg",
+            "pressure.xvg",
+            "density.xvg",
+            "potential.xvg",
+            "md.gro",
+            "md.xtc",
+            "rmsd.xvg",
+            "rmsd_xtal.xvg",
+            "rmsf.xvg",
+            "gyrate.xvg",
+            "hbnum_prot_wat.xvg",
+            "hbnum_sidechain.xvg",
+        ]
+        self.EXPECTED_FILES_TEMPLATE = [
+            "{pdb_id}.pdb",
+            "{pdb_id}_prepared.pdb",
+            "{ligand_name}.pdb",
+            ["{ligand_name}_h.pdb", "{ligand_name}_1_h.pdb"],
+            "{pdb_id}_prepared_capped.pdb",
+            "{pdb_id}_prepared_capped_his.pdb",
+            ["{ligand_name}_h.prepi", "{ligand_name}_1_h.prepi"],
+            "{ligand_name}.frcmod",
+            "complex.pdb",
+            "complex.prmtop",
+            "complex.inpcrd",
+            "complex_tleap.pdb",
+            "topol.top",
+            "complex.gro",
+            "topol_without_posre.top",
+            "{ligand_name}.gro",
+            "em.gro",
+            "nvt.gro",
+            "nvt.xtc",
+            "npt.gro",
+            "npt.xtc",
+            "temperature.xvg",
+            "pressure.xvg",
+            "density.xvg",
+            "potential.xvg",
+            "md.gro",
+            "md.xtc",
+            "rmsd.xvg",
+            "rmsd_xtal.xvg",
+            "rmsf.xvg",
+            "gyrate.xvg",
+            "hbnum_prot_lig.xvg",
+            "hbnum_prot_wat.xvg",
+            "hbnum_sidechain.xvg",
+        ]
 
         self.logger.info(f"MDAgent initialized.")
 
@@ -60,18 +124,22 @@ class MDAgent(BaseAgent):
         if (tool_name in ("gromacs_production", "gromacs_equil", "gromacs_analysis")) and (
             " failed with return code " in tool_call
         ):
+            self.logger.error(f"{tool_call}")
             return False
-            raise ToolOutputError(f"Gromacs tool execution failed: {tool_call}")
 
-        if tool_name in ("run_tleap", "run_tleap_ligand"):
+        if tool_name in ("run_tleap", "run_tleap_ligand", "param_ligand"):
             if "tleap run failed with error:" in tool_call:
+                self.logger.error(f"{tool_call}")
                 return False
-                raise ToolOutputError(f"TLEaP run failed {tool_call}")
+            
+            if "Ligand parameterization failed with error:" in tool_call:
+                self.logger.error(f"{tool_call}")
+                return False
 
             if "ParmEd failed:" in tool_call:
+                self.logger.error(f"{tool_call}")
                 return False
-                raise ToolOutputError(f"ParmEd failed {tool_call}")
-            
+
         return True
 
     def _reset_pipeline(self):
@@ -199,13 +267,57 @@ class MDAgent(BaseAgent):
             return [step["step"] for step in self.plan["plan"]]
 
         return list(self.ESSENTIAL_STEPS)
+    
+    def _format_expected_files(self, templates):
+        values = {
+            "pdb_id": self.pdb_id.upper(),
+            "ligand_name": self.ligand_name.upper(),
+        }
+
+        formatted = []
+
+        for item in templates:
+            if isinstance(item, (list, tuple)):
+                formatted.append(
+                    [s.format(**values) for s in item]
+                )
+            else:
+                formatted.append(
+                    item.format(**values)
+                )
+
+        return formatted
+
+    def _resolve_file(self, f):
+        if isinstance(f, (list, tuple)):
+            for candidate in f:
+                path = self.sandbox_dir / candidate
+                if path.exists():
+                    return candidate
+            return f[0]
+        return f
 
     def _pipeline_successful(self) -> bool:
         """Check whether the full MD pipeline completed successfully."""
-        missing = [f for f in self.EXPECTED_FILES if not (self.sandbox_dir / f).exists()]
+        expected_files = (
+            self._format_expected_files(self.EXPECTED_FILES_TEMPLATE)
+            if self.ligand_name
+            else self._format_expected_files(self.EXPECTED_FILES_PROTEIN_TEMPLATE)
+        )
 
-        if missing:
-            self.logger.error(f"Pipeline incomplete: missing final outputs {missing}")
+        missing_or_empty = []
+
+        for f in expected_files:
+            resolved = self._resolve_file(f)
+            path = self.sandbox_dir / resolved
+
+            if not path.exists() or path.stat().st_size == 0:
+                missing_or_empty.append(resolved)
+
+        if missing_or_empty:
+            self.logger.error(
+                f"Pipeline incomplete: missing final outputs {missing_or_empty}"
+            )
             return False
 
         return True
@@ -260,7 +372,8 @@ class MDAgent(BaseAgent):
         if self.ligand_name and success:
             user_prompt = "\n==========\nWould you like me to calculate the free energy of binding for your protein-ligand system using the MMPBSA tool? (yes/no) \n\n"
 
-            user_answer = input(user_prompt).strip().lower()
+            # user_answer = input(user_prompt).strip().lower()
+            user_answer = "yes"
 
             if user_answer in ("yes", "y"):
                 self.logger.info("Running MMPBSA calculation...")

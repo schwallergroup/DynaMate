@@ -143,7 +143,7 @@ def param_ligand(sandbox_dir: str, ligand_files: str | list[str], ligand_name: s
 
     # Create frcmod file using parmchk2
     cmd = shlex.split(f"parmchk2 -i {sandbox_dir}/{ligand_stem}.mol2 -f mol2 -o {sandbox_dir}/{ligand_stem}.frcmod")
-    run_5 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True, check=True)
+    run_5 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
     if run_5.returncode != 0:
         error_text = "\n".join(filter(None, [run_5.stderr, run_5.stdout]))
         return f"Ligand parameterization failed with error: {error_text}"

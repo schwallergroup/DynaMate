@@ -151,14 +151,14 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
     # Extract ligand
     if (ligand_name is not None) and (ligand_name != "XXX") and (ligand_name != "None") and (ligand_name != "None_h"):
         # Count number of ligands
-        resnums = set()
+        ligand_keys = set()
         with open(f"{sandbox_dir}/{pdb_id}.pdb") as f:
             for line in f:
-                if line.startswith("HETATM") and ligand_name in line:
+                if line.startswith("HETATM") and line[17:20].strip() == ligand_name:
+                    chain = line[21]
                     resnum = int(line[22:26])
-                    resnums.add(resnum)
-        print("resnums is: ", resnums)
-        num_ligands = len(resnums)
+                    ligand_keys.add((chain, resnum))
+        num_ligands = len(ligand_keys)
         logger.info(f"IMPORTANT: Number of ligands {ligand_name} found: {num_ligands}")
 
         if num_ligands == 0:
@@ -183,12 +183,13 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
             # Collect HETATM lines by residue number
             with open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile:
                 for line in infile:
-                    if line.startswith("HETATM") and ligand_name in line:
-                        resnum = int(line[22:26])  # residue number column
-                        ligands[resnum].append(line)
+                    if line.startswith("HETATM") and line[17:20].strip() == ligand_name:
+                        chain = line[21].strip() or "_"
+                        resnum = int(line[22:26])
+                        ligands[(chain, resnum)].append(line)
 
             # Write one file per ligand
-            for i, (resnum, atom_lines) in enumerate(ligands.items(), start=1):
+            for i, ((chain, resnum), atom_lines) in enumerate(ligands.items(), start=1):
                 ligand_pdb_file = f"{sandbox_dir}/{ligand_name}_{i}.pdb"
                 ligand_pdb_files_list.append(ligand_pdb_file)
                 with open(ligand_pdb_file, "w") as outfile:
