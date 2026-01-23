@@ -372,8 +372,7 @@ class MDAgent(BaseAgent):
         if self.ligand_name and success:
             user_prompt = "\n==========\nWould you like me to calculate the free energy of binding for your protein-ligand system using the MMPBSA tool? (yes/no) \n\n"
 
-            # user_answer = input(user_prompt).strip().lower()
-            user_answer = "yes"
+            user_answer = input(user_prompt).strip().lower()
 
             if user_answer in ("yes", "y"):
                 self.logger.info("Running MMPBSA calculation...")

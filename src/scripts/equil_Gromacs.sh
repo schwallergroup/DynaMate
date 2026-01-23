@@ -96,7 +96,7 @@ if grep -E "system1 +2" topol.top; then #special case for two identical chains n
 		echo "Adding group r_${ranges[0]} to index.ndx" >> $LOG_FILE 2>&1
 		echo -e "ri ${ranges[0]}\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
 	fi
-	if grep -Fq "[ Protein-H_&_r_${ranges[0]} ]" index.ndx; then # -F for fixed string (so can use [] without putting "^\[ r_${ranges[0]} \]", -q for quiet)
+	if grep -Fq "[ Protein-H_&_r_${ranges[0]} ]" index.ndx; then
 		echo "Group Protein-H_&_r_${ranges[0]} already exists in index.ndx" >> $LOG_FILE 2>&1
 	else
 		echo "Adding group Protein-H_&_r_${ranges[0]} to index.ndx" >> $LOG_FILE 2>&1
@@ -105,13 +105,13 @@ if grep -E "system1 +2" topol.top; then #special case for two identical chains n
 else 
 	i=1
     for range in "${ranges[@]}"; do
-        if grep -Fq "[ r_$range ]" index.ndx; then # -F for fixed string (so can use [] without putting "^\[ r_${ranges[0]} \]", -q for quiet)
+        if grep -Fq "[ r_$range ]" index.ndx; then
 			echo "Group r_$range already exists in index.ndx" >> $LOG_FILE 2>&1
 		else
 			echo "Adding group r_$range to index.ndx" >> $LOG_FILE 2>&1
 			echo -e "ri $range\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
 		fi
-		if grep -Fq "[ Protein-H_&_r_$range ]" index.ndx; then # -F for fixed string (so can use [] without putting "^\[ r_${ranges[0]} \]", -q for quiet)
+		if grep -Fq "[ Protein-H_&_r_$range ]" index.ndx; then
 			echo "Group Protein-H_&_r_$range already exists in index.ndx" >> $LOG_FILE 2>&1
 		else
 			echo "Adding group Protein-H_&_r_$range to index.ndx" >> $LOG_FILE 2>&1
