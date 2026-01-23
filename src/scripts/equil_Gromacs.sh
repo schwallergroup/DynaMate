@@ -53,7 +53,7 @@ fi
 # Step 2: if 1 chain, create posre.itp file
 if [ "$chains" -eq "1" ]; then
     if ! ls posre.itp 1> /dev/null 2>&1;then
-            echo ""Protein-H"" | $GMX genrestr -f em.gro -n index.ndx -o posre.itp -fc 1000 1000 1000 >> $LOG_FILE 2>&1
+        echo ""Protein-H"" | $GMX genrestr -f em.gro -n index.ndx -o posre.itp -fc 1000 1000 1000 >> $LOG_FILE 2>&1
     fi
 else
 # Step 2: if more than 1 chain, create posre_chain(i).itp files
@@ -90,12 +90,33 @@ EOF
 if grep -E "system1 +2" topol.top; then #special case for two identical chains named system1
 	echo "You have two identical chains named system1, therefore only one position restraint file for the first chain will be created." >> $LOG_FILE 2>&1
 	echo "Creating group for residues ${ranges[0]}" >> $LOG_FILE 2>&1
-	echo -e "ri ${ranges[0]}\n2 & \"r_${ranges[0]}\"\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+	if grep -Fq "[ r_${ranges[0]} ]" index.ndx; then # -F for fixed string (so can use [] without putting "^\[ r_${ranges[0]} \]", -q for quiet)
+		echo "Group r_${ranges[0]} already exists in index.ndx" >> $LOG_FILE 2>&1
+	else
+		echo "Adding group r_${ranges[0]} to index.ndx" >> $LOG_FILE 2>&1
+		echo -e "ri ${ranges[0]}\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+	fi
+	if grep -Fq "[ Protein-H_&_r_${ranges[0]} ]" index.ndx; then
+		echo "Group Protein-H_&_r_${ranges[0]} already exists in index.ndx" >> $LOG_FILE 2>&1
+	else
+		echo "Adding group Protein-H_&_r_${ranges[0]} to index.ndx" >> $LOG_FILE 2>&1
+		echo -e "2 & \"r_${ranges[0]}\"\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+	fi
 else 
 	i=1
     for range in "${ranges[@]}"; do
-        echo "Creating group for residues $range..." >> $LOG_FILE 2>&1
-        echo -e "ri $range\n2 & \"r_${range}\"\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+        if grep -Fq "[ r_$range ]" index.ndx; then
+			echo "Group r_$range already exists in index.ndx" >> $LOG_FILE 2>&1
+		else
+			echo "Adding group r_$range to index.ndx" >> $LOG_FILE 2>&1
+			echo -e "ri $range\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+		fi
+		if grep -Fq "[ Protein-H_&_r_$range ]" index.ndx; then
+			echo "Group Protein-H_&_r_$range already exists in index.ndx" >> $LOG_FILE 2>&1
+		else
+			echo "Adding group Protein-H_&_r_$range to index.ndx" >> $LOG_FILE 2>&1
+			echo -e "2 & \"r_$range\"\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+		fi	
         ((i++))
     done
 fi
@@ -103,7 +124,10 @@ fi
     # Step 6: generate posre.itp for each chain
 if grep -E "system1 +2" topol.top; then #special case for two identical chains named system1
 	group_name="Protein-H_&_r_${ranges[0]}"
-	echo "$group_name" | $GMX genrestr -f em.gro -n index.ndx -o "posre.itp" -fc 1000 1000 1000 >> $LOG_FILE 2>&1
+	if ! ls posre.itp 1> /dev/null 2>&1;then
+		echo "Generating position restraints for chain1" >> $LOG_FILE 2>&1
+		echo "$group_name" | $GMX genrestr -f em.gro -n index.ndx -o "posre.itp" -fc 1000 1000 1000 >> $LOG_FILE 2>&1
+	fi
 else 
     i=1
     for range in "${ranges[@]}"; do

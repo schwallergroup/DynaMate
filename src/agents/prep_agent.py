@@ -70,9 +70,11 @@ class PrepAgent(BaseAgent):
 
     def _get_pdb_file_path(self, prompt):
         pdb_file_path = None
+        num_calls = 0
 
-        while pdb_file_path is None:
+        while pdb_file_path is None and num_calls < 5:
             response = self._prompt_llm(prompt)
+            num_calls += 1
             self.logger.info(f"Response: {response}")
 
             tool_calls = response.tool_calls

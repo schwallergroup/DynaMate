@@ -126,9 +126,15 @@ def param_ligand(sandbox_dir: str, ligand_files: str | list[str], ligand_name: s
     logger.info(f"Mol2 file for ligand {ligand_stem} created")
 
     cmd = shlex.split(f"sed -i 's/UNL/{ligand_name}/g' {sandbox_dir}/{ligand_stem}.mol2")
-    run_3 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
-    if run_3.returncode != 0:
-        error_text = "\n".join(filter(None, [run_3.stderr, run_3.stdout]))
+    run_3_UNL = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
+    if run_3_UNL.returncode != 0:
+        error_text = "\n".join(filter(None, [run_3_UNL.stderr, run_3_UNL.stdout]))
+        return f"Ligand parameterization failed with error: {error_text}"
+    
+    cmd = shlex.split(f"sed -i 's/UNK/{ligand_name}/g' {sandbox_dir}/{ligand_stem}.mol2")
+    run_3_UNK = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
+    if run_3_UNK.returncode != 0:
+        error_text = "\n".join(filter(None, [run_3_UNK.stderr, run_3_UNK.stdout]))
         return f"Ligand parameterization failed with error: {error_text}"
 
     # Create prepi file using antechamber
@@ -143,7 +149,7 @@ def param_ligand(sandbox_dir: str, ligand_files: str | list[str], ligand_name: s
 
     # Create frcmod file using parmchk2
     cmd = shlex.split(f"parmchk2 -i {sandbox_dir}/{ligand_stem}.mol2 -f mol2 -o {sandbox_dir}/{ligand_stem}.frcmod")
-    run_5 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True, check=True)
+    run_5 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
     if run_5.returncode != 0:
         error_text = "\n".join(filter(None, [run_5.stderr, run_5.stdout]))
         return f"Ligand parameterization failed with error: {error_text}"
