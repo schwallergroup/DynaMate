@@ -89,7 +89,7 @@ class MDAgent(BaseAgent):
             "{pdb_id}_prepared_capped.pdb",
             "{pdb_id}_prepared_capped_his.pdb",
             ["{ligand_name}_h.prepi", "{ligand_name}_1_h.prepi"],
-            "{ligand_name}.frcmod",
+            ["{ligand_name}.frcmod", "{ligand_name}_h.frcmod"],
             "complex.pdb",
             "complex.prmtop",
             "complex.inpcrd",
