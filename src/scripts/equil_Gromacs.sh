@@ -34,19 +34,15 @@ else
 fi
 
 #------- ENERGY MINIMISATION ------------
-if ! ls em.gro 1> /dev/null 2>&1; then
-	$GMX grompp -f em.mdp -c $INPUT_GRO -p topol.top -o em.tpr >> $LOG_FILE 2>&1
-	$GMX mdrun -v -deffnm em >> $LOG_FILE 2>&1
+$GMX grompp -f em.mdp -c $INPUT_GRO -p topol.top -o em.tpr >> $LOG_FILE 2>&1
+$GMX mdrun -v -deffnm em >> $LOG_FILE 2>&1
 
-	if [ -f em.gro ]; then
-	        echo "'em.gro' created"
-		echo "11 0" | $GMX energy -f em.edr -o potential.xvg >> $LOG_FILE 2>&1
-	else
-		echo "Error: Failed to create 'em.gro'" >> $LOG_FILE 2>&1
-		exit 1
-	fi
+if [ -f em.gro ]; then
+	echo "'em.gro' created"
+	echo "11 0" | $GMX energy -f em.edr -o potential.xvg >> $LOG_FILE 2>&1
 else
-	echo "'em.gro' already exists. Skipping energy minimisation." >> $LOG_FILE 2>&1
+	echo "Error: Failed to create 'em.gro'" >> $LOG_FILE 2>&1
+	exit 1
 fi
 
 #----------Create posres files-----------
@@ -261,36 +257,26 @@ if grep -q "Cl-" index.ndx || grep -q "Na+" index.ndx; then
 	fi
 fi
 #--------------- NVT --------------------
+$GMX grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr -n index.ndx -maxwarn 2 >> $LOG_FILE 2>&1
+$GMX mdrun -v -deffnm nvt >> $LOG_FILE 2>&1
 
-if ! ls nvt.gro 1> /dev/null 2>&1; then
-
-	$GMX grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr -n index.ndx -maxwarn 2 >> $LOG_FILE 2>&1
-	$GMX mdrun -v -deffnm nvt >> $LOG_FILE 2>&1
-        
-	if [ -f nvt.gro ]; then
-	    echo "'nvt.gro' created" >> $LOG_FILE 2>&1
-		echo -e "Temperature \n 0" | $GMX energy -f nvt.edr -o temperature.xvg >> $LOG_FILE 2>&1
-	else
-		echo "Error: Failed to create 'nvt.gro'" >> $LOG_FILE 2>&1
-		exit 1
-	fi
+if [ -f nvt.gro ]; then
+	echo "'nvt.gro' created" >> $LOG_FILE 2>&1
+	echo -e "Temperature \n 0" | $GMX energy -f nvt.edr -o temperature.xvg >> $LOG_FILE 2>&1
 else
-	echo "'nvt.gro' already exists. Skipping NVT." >> $LOG_FILE 2>&1
+	echo "Error: Failed to create 'nvt.gro'" >> $LOG_FILE 2>&1
+	exit 1
 fi
 
 #--------------- NPT --------------------
-if ! ls npt.gro 1> /dev/null 2>&1; then
-	$GMX grompp -f npt.mdp -c nvt.gro -t nvt.cpt -r nvt.gro -p topol.top -o npt.tpr -n index.ndx -maxwarn 2 >> $LOG_FILE 2>&1
-	$GMX mdrun -v -deffnm npt >> $LOG_FILE 2>&1
+$GMX grompp -f npt.mdp -c nvt.gro -t nvt.cpt -r nvt.gro -p topol.top -o npt.tpr -n index.ndx -maxwarn 2 >> $LOG_FILE 2>&1
+$GMX mdrun -v -deffnm npt >> $LOG_FILE 2>&1
 
-	if [ -f npt.gro ]; then
-	    echo "'npt.gro' created" >> $LOG_FILE 2>&1
-		echo -e "Pressure \n 0" | $GMX energy -f npt.edr -o pressure.xvg >> $LOG_FILE 2>&1
-		echo -e "Density \n 0" | $GMX energy -f npt.edr -o density.xvg >> $LOG_FILE 2>&1
-	else
-		echo "Error: Failed to create 'npt.gro'" >> $LOG_FILE 2>&1
-		exit 1
-	fi
+if [ -f npt.gro ]; then
+	echo "'npt.gro' created" >> $LOG_FILE 2>&1
+	echo -e "Pressure \n 0" | $GMX energy -f npt.edr -o pressure.xvg >> $LOG_FILE 2>&1
+	echo -e "Density \n 0" | $GMX energy -f npt.edr -o density.xvg >> $LOG_FILE 2>&1
 else
-	echo "'npt.gro' already exists. Skipping NPT." >> $LOG_FILE 2>&1
+	echo "Error: Failed to create 'npt.gro'" >> $LOG_FILE 2>&1
+	exit 1
 fi

@@ -199,64 +199,70 @@ class MDAgent(BaseAgent):
             self.completed_summary += f"{name} failed;\n"
 
     def _run_agent(self, remaining_steps: list[str]):
-        iteration = 1
+        # Inject the task prompt once before the loop
+        remaining_steps_string = "\n".join(remaining_steps)
+        self.messages.append({
+            "role": "user",
+            "content": (
+                "Execute the molecular dynamics pipeline. The required steps are:\n"
+                f"{remaining_steps_string}\n\n"
+                "Work through each step in order using the available tools. "
+                "Ask the user if you need clarification on any step."
+            ),
+        })
 
-        # let the LLM continuously propose next tool steps, up to MAX_ITERATIONS
-        while remaining_steps and iteration < self.MAX_ITERATION:
+        for iteration in range(1, self.MAX_ITERATION + 1):
             try:
-                remaining_steps_string = "\n".join(remaining_steps)
-                prompt = (
-                    "The following essential steps are remaining in the pipeline:\n"
-                    f"{remaining_steps_string}\n\n"
-                    f"Completed: {self.completed_steps}\n"
-                    "Choose the next best tool to execute. Do not ask the user anything."
-                )
-                self.messages.append({"role": "user", "content": prompt})
-
                 response = self._call_llm(self.messages)
                 tool_calls = response.tool_calls
 
                 if tool_calls:
-                    self.logger.info(f"Length of tool calls: {len(tool_calls)}")
+                    self.logger.info(f"Iteration {iteration}: {len(tool_calls)} tool call(s)")
                     self.messages.append(response)
                     for tool_call in tool_calls:
                         exec_result = self._process_tool_call(tool_call)
                         self._process_tool_results(tool_call.function.name, exec_result, remaining_steps)
-
                 else:
-                    assistant_message = {"role": "assistant", "content": response.content}
-                    self.messages.append(assistant_message)
+                    self.messages.append({"role": "assistant", "content": response.content})
+                    if response.content:
+                        print(f"\nAgent: {response.content}")
+                    user_input = input("You (press Enter to finish): ").strip()
+                    if not user_input:
+                        self.logger.info(f"Agent finished after {iteration} iteration(s).")
+                        break
+                    self.messages.append({"role": "user", "content": user_input})
 
-                iteration += 1
-                self.logger.info(f"Logging agent iteration {iteration}")
             except Exception as e:
                 self.logger.error(str(e))
-                raise
+                self.messages.append({"role": "user", "content": f"An error occurred: {e}"})
 
         return remaining_steps
 
     def _run_bfe(self, prompt):
-        iteration = 1
-        while iteration < self.MAX_ITERATION_BFE:
-            try:
-                self.messages.append({"role": "user", "content": prompt})
+        # Inject the task prompt once before the loop
+        self.messages.append({"role": "user", "content": prompt})
 
+        for iteration in range(1, self.MAX_ITERATION_BFE + 1):
+            try:
                 response = self._call_llm(self.messages)
                 tool_calls = response.tool_calls
 
                 if tool_calls:
-                    self.logger.info(f"Length of tool calls: {len(tool_calls)}")
+                    self.logger.info(f"BFE iteration {iteration}: {len(tool_calls)} tool call(s)")
                     self.messages.append(response)
                     for tool_call in tool_calls:
                         exec_result = self._process_tool_call(tool_call)
                         self._process_tool_results_bfe(tool_call.function.name, exec_result)
-
                 else:
-                    assistant_message = {"role": "assistant", "content": response.content}
-                    self.messages.append(assistant_message)
+                    self.messages.append({"role": "assistant", "content": response.content})
+                    if response.content:
+                        print(f"\nAgent: {response.content}")
+                    user_input = input("You (press Enter to finish): ").strip()
+                    if not user_input:
+                        self.logger.info(f"BFE agent finished after {iteration} iteration(s).")
+                        break
+                    self.messages.append({"role": "user", "content": user_input})
 
-                iteration += 1
-                self.logger.info(f"Logging agent iteration {iteration}")
             except Exception as e:
                 self.logger.error(str(e))
                 raise
@@ -271,7 +277,7 @@ class MDAgent(BaseAgent):
     def _format_expected_files(self, templates):
         values = {
             "pdb_id": self.pdb_id.upper(),
-            "ligand_name": self.ligand_name.upper(),
+            "ligand_name": self.ligand_name.upper() if self.ligand_name else "",
         }
 
         formatted = []

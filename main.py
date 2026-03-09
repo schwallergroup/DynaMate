@@ -34,11 +34,11 @@ class CommandLineArgs:
     Tyro automatically generates a command line interface from this class.
     """
 
-    pdb_id: str
-    "PDB ID."
-
     model: str
     "Model name to use for the MD pipeline."
+
+    pdb_id: str | None = None
+    "PDB ID (optional; agent will ask interactively if not provided)."
 
     ligand: str | None = None
     "Ligand ID (optional; defaults to no ligand)."

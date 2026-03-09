@@ -71,9 +71,5 @@ if grep -q "Cl-" index.ndx || grep -q "Na+" index.ndx; then
 fi
 
 #------- PRODUCTION MD ------------
-if ! ls md.gro 1> /dev/null 2>&1; then
-    $GMX grompp -f md.mdp -c $INPUT_GRO -t $NPT_CPT_FILE -p topol.top -n index.ndx -o md.tpr >> $LOG_FILE 2>&1
-    echo "y" | $GMX mdrun -v -deffnm md >> $LOG_FILE 2>&1
-else
-    echo "'md.gro' already exists. Skipping production MD."
-fi
+$GMX grompp -f md.mdp -c $INPUT_GRO -t $NPT_CPT_FILE -p topol.top -n index.ndx -o md.tpr >> $LOG_FILE 2>&1
+echo "y" | $GMX mdrun -v -deffnm md >> $LOG_FILE 2>&1
