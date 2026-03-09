@@ -53,12 +53,13 @@ class CommandLineArgs:
 
 
 def main(config: CommandLineArgs):
-    root_logger = utils.get_class_logger("Main")
-
     # create a run directory inside of sandbox
     run_name = f"run_{utils.time_now()}"
     sandbox_dir = constants.DATA_DIR / run_name
     sandbox_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = sandbox_dir / "run.log"
+    root_logger = utils.get_class_logger("Main", log_file=log_file)
 
     root_logger.info("DynaMate - your assistant for running molecular dynamics")
 

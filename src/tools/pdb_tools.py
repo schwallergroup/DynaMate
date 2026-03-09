@@ -9,7 +9,7 @@ from collections import defaultdict
 import traceback
 from src.utils import get_class_logger
 
-logger = get_class_logger(__name__)
+logger = get_class_logger(__name__, log_to_file=False)
 
 
 class NoLigand(Exception):

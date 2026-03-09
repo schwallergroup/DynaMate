@@ -7,7 +7,7 @@ from src import constants
 from src.utils import get_class_logger
 import time
 
-logger = get_class_logger(__name__)
+logger = get_class_logger(__name__, log_to_file=False)
 
 def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_files=None) -> str:
     # sometimes llm passes ligands as empty strings

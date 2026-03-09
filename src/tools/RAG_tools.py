@@ -4,6 +4,7 @@ import os
 import os.path
 import contextlib
 import pickle
+import asyncio
 from src import constants
 
 
@@ -14,6 +15,9 @@ def _load_documents() -> Docs:
 
     pdf_files = list(constants.PAPER_DIR.glob("*.pdf"))
     total_files = len(pdf_files)
+
+    if total_files == 0:
+        raise ValueError(f"No PDF files found in {constants.PAPER_DIR}. Please ensure there are relevant papers in this directory.")
 
     pickled_docs = "my_docs.pkl"
 
@@ -78,7 +82,7 @@ def search_papers(query: dict):
         timeout=120,                     # MD queries can be long
     )
 
-    result = documents.query(query, settings=settings)
+    result = asyncio.run(documents.aquery(query, settings=settings))
     answer = result.formatted_answer
     if "I cannot answer." in answer:
         answer += f" Check to ensure there's papers in {paper_directory}"
