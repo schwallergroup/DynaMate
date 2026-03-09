@@ -4,7 +4,7 @@ import parmed as pmd  # type: ignore
 from src import constants
 from src.utils import get_class_logger
 
-logger = get_class_logger(__name__)
+logger = get_class_logger(__name__, log_to_file=False)
 
 
 def run_tleap(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:

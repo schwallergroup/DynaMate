@@ -9,7 +9,8 @@ dependencies:
   - ambertools        
   - mdanalysis        
   - numpy=1.26.4
-  - parmed            
+  - parmed 
+  - openbabel           
   - pip:
       - openai>=2.0.0
       - pydantic>=2.11.9

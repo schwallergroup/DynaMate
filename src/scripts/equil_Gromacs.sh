@@ -4,7 +4,17 @@ if [ "$#" -lt 3 ]; then
     exit 1
 fi
 
-GMX='gmx'
+# Detect available GROMACS executable
+if command -v gmx >/dev/null 2>&1; then
+    GMX='gmx'
+elif command -v gmx_mpi >/dev/null 2>&1; then
+    GMX='gmx_mpi'
+elif command -v gmx_d >/dev/null 2>&1; then
+    GMX='gmx_d'
+else
+    echo "Warning: gmx not found in PATH. Please install GROMACS." >&2
+    GMX='gmx'
+fi
 SANDBOX_DIR="$1"
 INPUT_GRO="$2"
 LOG_FILE="$3"

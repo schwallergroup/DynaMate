@@ -46,7 +46,7 @@ class BaseAgent(ABC):
         self.messages: List[Dict[str, Any]] = []
         self.llm_cost = 0
 
-        self.logger = utils.get_class_logger(self.__class__.__name__)
+        self.logger = utils.get_class_logger(self.__class__.__name__, log_file=self.sandbox_dir / "run.log")
 
     @abstractmethod
     def setup_tools(self):

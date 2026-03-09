@@ -75,7 +75,7 @@ class PrepAgent(BaseAgent):
         while pdb_file_path is None and num_calls < 5:
             response = self._prompt_llm(prompt)
             num_calls += 1
-            self.logger.info(f"Response: {response}")
+            self.logger.info(f"Response: {response.content}")
 
             tool_calls = response.tool_calls
             if tool_calls:

@@ -7,26 +7,23 @@ import pathlib
 from datetime import datetime
 
 
-def get_class_logger(class_name: str, log_dir: Path = None) -> logging.Logger:
+def get_class_logger(class_name: str, log_file: Path = None, log_to_file: bool = True) -> logging.Logger:
     """
     Create or retrieve a logger specific to a class.
-    Each class writes to its own log file inside agent_logs/.
+    When log_file is provided all loggers in the run share the same file.
     """
-    if log_dir is None:
-        log_dir = Path(__file__).resolve().parent.parent / "agent_logs"
-    log_dir.mkdir(exist_ok=True)
-
-    log_file = log_dir / f"{class_name}.log"
-
     logger = logging.getLogger(class_name)
     logger.setLevel(logging.INFO)
 
     # Avoid adding duplicate handlers
     if not logger.handlers:
-        file_handler = logging.FileHandler(log_file)
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+        if log_to_file and log_file is not None:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
 
         # also print to stdout
         stream_handler = logging.StreamHandler(sys.stdout)
