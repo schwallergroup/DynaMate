@@ -68,34 +68,88 @@ class PrepAgent(BaseAgent):
 
         self.messages.append(system_prompt)
 
-    def _get_pdb_file_path(self, prompt):
-        pdb_file_path = None
-        num_calls = 0
+    def _ask_for_system(self):
+        """Have the LLM ask the user for the PDB ID and optional ligand, parse via LLM, then confirm."""
+        # Step 1: LLM asks the user
+        self.messages.append({
+            "role": "user",
+            "content": "Ask the user what molecular system they would like to simulate (PDB ID or file upload) and whether they have a ligand to include (3-letter code).",
+        })
+        response = self._call_llm(self.messages)
+        self.messages.append({"role": "assistant", "content": response.content})
+        print(f"\nAgent: {response.content}")
 
-        while pdb_file_path is None and num_calls < 5:
-            response = self._prompt_llm(prompt)
-            num_calls += 1
+        while True:
+            user_input = input("You: ").strip()
+            self.messages.append({"role": "user", "content": user_input})
+
+            # Step 2: LLM extracts PDB ID and ligand as JSON
+            parse_messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Extract the PDB ID (4-character alphanumeric code) and ligand ID "
+                        f"(3-character alphanumeric code, if present) from this user response:\n\n"
+                        f"\"{user_input}\"\n\n"
+                        f"Reply with only valid JSON in this exact format: "
+                        f'{{\"pdb_id\": \"XXXX\", \"ligand\": \"XXX\"}} or '
+                        f'{{\"pdb_id\": \"XXXX\", \"ligand\": null}} if no ligand was mentioned.'
+                    ),
+                }
+            ]
+            parse_response = self._call_llm(parse_messages)
+
+            try:
+                raw = parse_response.content.strip()
+                raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw, flags=re.MULTILINE).strip()
+                extracted = json.loads(raw)
+                pdb_id = (extracted.get("pdb_id") or "").strip().upper() or None
+                ligand = (extracted.get("ligand") or "").strip().upper() or None
+            except (json.JSONDecodeError, AttributeError):
+                pdb_id, ligand = None, None
+
+            # Step 3: Confirm with user
+            confirm_parts = [f"PDB ID: {pdb_id or 'not found'}"]
+            confirm_parts.append(f"Ligand: {ligand}" if ligand else "Ligand: none")
+            print(f"\nAgent: I understood the following — {', '.join(confirm_parts)}. Is that correct? (yes/no)")
+
+            confirmation = input("You: ").strip().lower()
+            if confirmation in ("yes", "y"):
+                break
+
+            print("Agent: No problem, please provide the PDB ID and ligand again.")
+
+        self.pdb_id = pdb_id
+        if self.ligand_name is None:
+            self.ligand_name = ligand
+
+    def _get_pdb_file_path(self, prompt):
+        # Inject the task prompt once before the loop
+        self.messages.append({"role": "user", "content": prompt})
+
+        for _ in range(5):
+            response = self._call_llm(self.messages)
             self.logger.info(f"Response: {response.content}")
 
             tool_calls = response.tool_calls
             if tool_calls:
                 self.logger.info(f"Length of tool calls: {len(tool_calls)}")
                 self.messages.append(response)
-
                 for tool_call in tool_calls:
                     self._process_tool_call(tool_call)
-
             else:
-                assistant_message = {"role": "assistant", "content": response.content}
-                self.messages.append(assistant_message)
+                self.messages.append({"role": "assistant", "content": response.content})
+                if response.content:
+                    print(f"\nAgent: {response.content}")
+                user_input = input("You: ").strip()
+                if user_input:
+                    self.messages.append({"role": "user", "content": user_input})
 
-            # Check if a PDB file exists in sandbox
             pdb_files = list(self.sandbox_dir.glob("*.pdb"))
-
             if pdb_files:
-                pdb_file_path = str(pdb_files[0])
+                return str(pdb_files[0])
 
-        return pdb_file_path
+        return None
 
     def _find_ligand(self):
         lig_response = None
@@ -225,11 +279,18 @@ class PrepAgent(BaseAgent):
 
         self._setup_system_prompt()
 
-        user_input = self.pdb_id
-        prompt = f"I would like to run molecular dynamics for the system {user_input}. If a PDB has not been uploaded, use the tools available to fetch and prepare the PDB for {user_input}."
-        self.logger.info(f"User input: {prompt}")
+        interactive = self.pdb_id is None
+        if interactive:
+            self._ask_for_system()
+
+        if interactive:
+            prompt = "Please proceed to fetch and prepare the PDB file for the system we just discussed."
+        else:
+            prompt = f"Fetch and prepare the PDB file for {self.pdb_id}."
+
+        self.logger.info(f"Starting prep for PDB: {self.pdb_id}, Ligand: {self.ligand_name or 'none'}")
         self.pdb_file_path = self._get_pdb_file_path(prompt)
-        self.logger.info(f"I now have access to the structure information for protein {self.pdb_file_path}")
+        self.logger.info(f"Structure ready: {self.pdb_file_path}")
 
         self._find_ligand()
 

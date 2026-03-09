@@ -34,13 +34,13 @@ OPENROUTER_API_KEY=your_key_here
 
 3. Run the agent:
 ```
-docker run --env-file .env dynamate --pdb-id <pdb-id> --ligand <ligand-name (optional)> --model <model_name> --temp <simulation temperature (K), default: chosen by the agent> --duration <simulation duration (ns), default: chosen by the agent>
+docker run --env-file .env dynamate --model <model_name> --pdb-id <pdb-id> --ligand <ligand-name (optional)> --temp <simulation temperature (K), default: chosen by the agent> --duration <simulation duration (ns), default: chosen by the agent>
 ```
 
 4. Interactive mode (for debugging or exploration):
 ```
 docker run -it --rm --env-file .env dynamate /bin/bash
-python main.py --pdb-id <pdb-id> --model <model_name>
+python main.py --model <model_name> --pdb-id <pdb-id>
 ```
 
 Happy molecular dynamics simulations! 🧬
@@ -189,12 +189,14 @@ source setup.sh
 ```
 Now you are ready to use DynaMate! 
 ## Usage
-To launch the script specify the PDB (or upload it), possible ligand name, and model name in the command line arguments. For example, to launch the MD run with the protein 5UEZ, ligand 89G, and model GPT-5 mini:
+To launch the script specify the model name in the command line arguments. For example, to launch the agent with GPT-5 mini:
 ```bash
-python main.py --pdb_id 5UEZ --ligand 89G --model openrouter/openai/gpt-5-mini
+python main.py --model openrouter/openai/gpt-5-mini
 ```
 You can optionally specify:
 ```
+--pdb-id <protein you would like to run MD for, default: prompted at runtime>
+--ligand <ligand you would like to run MD with, default: prompted at runtime>
 --temp <simulation temperature (K), default: chosen by the agent>
 --duration <simulation duration (ns), default: chosen by the agent>
 ```
