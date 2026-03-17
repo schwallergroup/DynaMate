@@ -234,7 +234,7 @@ Skills are generated using [upskill](https://github.com/huggingface/upskill)'s P
 
 1. **Run the pipeline** with a capable model and pass `--upskill` to export the agent trace automatically on success:
 ```bash
-python main.py --model openrouter/openai/gpt-5-mini --pdb-id 6JJ3 --ligand UNL --upskill
+python main.py --model openrouter/openai/gpt-5-mini --pdb-id 6JJ3 --upskill
 ```
 
 2. **Generate a skill** from the exported trace:
@@ -246,7 +246,7 @@ This extracts error-recovery patterns from the trace (tool failures and how the 
 3. **Evaluate skill impact** by running a baseline vs. skilled comparison on one or more test systems. Each system independently selects protein-only or protein-ligand evaluation criteria:
 ```bash
 python generate_skill.py --eval-only \
-  --compare-systems 6JJ3_UNL 1FDH_None \
+  --compare-systems 6JJ3_None 1FDH_None \
   --compare-model openrouter/anthropic/claude-haiku-4-5
 ```
 This runs the full pipeline twice per system (without skill, then with skill) and prints a step-by-step comparison table with completion ratios and a delta score. If the skilled run does not complete successfully, the skill is automatically refined based on the failed steps and saved. You can optionally fix the simulation parameters to keep evaluation runs consistent:
@@ -261,7 +261,7 @@ If `--compare-temp` and `--compare-duration` are omitted, PrepAgent chooses them
 4. **Score an existing run** against expected output files without re-running the agent:
 ```bash
 python generate_skill.py --eval-only \
-  --eval-systems "6JJ3_UNL:sandbox/run_20260310_121949"
+  --eval-systems "6JJ3_None:sandbox/run_20260310_121949"
 ```
 
 ### Evaluation criteria
