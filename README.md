@@ -2,12 +2,14 @@
   <img src="assets/DynaMate.svg" alt="drawing" width="250"/>
 </p>
 
-DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipt with a collection of tools. Quality checks throughout the pipeline trigger re-tries when something goes wrong, allowing the agent to correct course and save you time on debugging. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
+DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipped with a collection of tools for the full GROMACS/AMBER workflow. Quality checks throughout the pipeline trigger retries when something goes wrong, allowing the agent to correct course and save you time on debugging. The agent communicates interactively — asking clarifying questions, validating parameters, and answering follow-up questions about results. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
 
 ## Key features
-* :rocket: Autonomous protein-ligand MD simulations and binding affinity calculations
-* :arrows_counterclockwise: Error analysis and correction
-* :bar_chart: Binding affinity calculations with MM/PB(GB)SA method
+* Autonomous protein-ligand MD simulations and binding affinity calculations
+* Error analysis and automatic correction with retry logic
+* Binding affinity calculations with MM/PB(GB)SA method
+* Interactive agent chat — the agent asks clarifying questions and accepts follow-up queries after the pipeline completes
+* Literature-informed parameters via PaperQA search over your own PDFs
 
 ## Software setup
 The tools used by the agent require that you have a local installation of the following software. We provide a Docker image with all dependencies pre-installed (recommended), or you can install everything manually if you prefer
@@ -28,8 +30,8 @@ docker build -t dynamate -f ./docker/Dockerfile .
 2. Create an `.env` file to store sensitive data like API keys:
 
 ```
-OPENROUTER_API_KEY=your_key_here
-# Add other keys as needed
+OPENROUTER_API_KEY=your_key_here        # Required: used by the MD pipeline via LiteLLM
+OPENAI_API_KEY=your_key_here            # Optional: used by PaperQA for literature search
 ```
 
 3. Run the agent:
@@ -43,7 +45,7 @@ docker run -it --rm --env-file .env dynamate /bin/bash
 python main.py --model <model_name> --pdb-id <pdb-id>
 ```
 
-Happy molecular dynamics simulations! 🧬
+Happy molecular dynamics simulations!
 
 ### Manual Setup
 
@@ -176,18 +178,12 @@ MMPBSA_ENV_DIR = Path("/path/to/miniconda3/envs/gmxMMPBSA/bin/gmx_MMPBSA")
 conda activate dynamate
 ```
 
-#### 9. Export python path so you can load the modules
-At the root of the project run:
-```bash
-export PYTHONPATH=.
-```
-
-#### 10. Run the setup script
-After setting up your project environment, make sure to run the setup script if you don't want to load gromacs each time. This will load both the environment and the softwares
+#### 9. Run the setup script
+After setting up your project environment, make sure to run the setup script to load your environment and gromacs.
 ```bash
 source setup.sh
 ```
-Now you are ready to use DynaMate! 
+Now you are ready to use DynaMate!
 ## Usage
 To launch the script specify the model name in the command line arguments. For example, to launch the agent with GPT-5 mini:
 ```bash
@@ -195,17 +191,34 @@ python main.py --model openrouter/openai/gpt-5-mini
 ```
 You can optionally specify:
 ```
---pdb-id <protein you would like to run MD for, default: prompted at runtime>
---ligand <ligand you would like to run MD with, default: prompted at runtime>
+--pdb-id <4-character PDB ID, default: agent asks interactively>
+--ligand <3-letter ligand code; omit for protein-only simulation>
 --temp <simulation temperature (K), default: chosen by the agent>
 --duration <simulation duration (ns), default: chosen by the agent>
 ```
 
-And again, happy molecular dynamics simulations! 🧬
+### Interactive workflow
+
+When `--pdb-id` is omitted, the PrepAgent will interactively ask you for a PDB ID and (optionally) a ligand code, validate your input, and confirm before proceeding. The agent may also ask clarifying questions about simulation parameters.
+
+After the MD pipeline completes, the MDAgent enters a chat mode where you can ask follow-up questions about the results (e.g. interpreting the RMSD plot). Press Enter on an empty line to finish the session.
+
+### Pipeline overview
+
+1. **PrepAgent** — Fetches and prepares the PDB structure, identifies ligands, searches your literature (if `my_papers/` exists), and generates a simulation plan with parameters.
+2. **MDAgent** — Executes the full GROMACS/AMBER workflow: PDB preparation, ligand parameterization (if applicable), topology building with tleap, energy minimization, NVT/NPT equilibration, production MD (default 0.1 ns), and trajectory analysis (RMSD, RMSF, radius of gyration, hydrogen bonds). Results are saved to `analysis.txt`. If any step fails, the agent analyzes the error and retries with corrected inputs.
 
 <p align="center">
   <img src="assets/MDAgent-Tools-workflow.png" alt="drawing" width="900"/>
 </p>
+
+### Paper search
+
+If you have a `my_papers/` directory containing relevant PDFs, the PrepAgent can search them to inform simulation parameters. An `OPENAI_API_KEY` is required for this feature (used by PaperQA for embeddings and retrieval). Add it to your `.env` file:
+```
+OPENAI_API_KEY=your_key_here
+```
+The first run indexes all PDFs and caches them in `my_docs.pkl` for fast subsequent queries.
 
 ## Citation
 If you found this code useful, please consider citing:

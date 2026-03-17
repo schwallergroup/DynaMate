@@ -22,7 +22,8 @@ dependencies:
       - ruff>=0.14.0
       - parmed>=4.3.0
       - pdbfixer @ git+https://github.com/openmm/pdbfixer
-      - paper-qa>=5.29.1
+      - paper-qa==5.29.1
+      - paper-qa-pypdf==5.29.1
       - tyro>=0.9.35
       - python-dotenv>=1.1.1
       # dev deps:

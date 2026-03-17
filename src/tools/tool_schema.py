@@ -11,6 +11,28 @@ class Tool(BaseModel):
 def create_tool_schema_prep(sandbox_dir):
     tools = [
         Tool(
+            name="grep_file",
+            description=(
+                "Search a file for lines matching a regex pattern. Returns matching lines with their line numbers. "
+                "Useful for inspecting specific parts of large files (e.g. finding HETATM lines in a PDB, checking specific residues, "
+                "finding errors in log files) without reading the entire file."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": f"Absolute path to the file to search. Must be inside the sandbox directory ({sandbox_dir}).",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "A regex pattern to match against each line of the file (e.g. '^HETATM', 'ERROR|FATAL', 'ILE A   2').",
+                    },
+                },
+                "required": ["path", "pattern"],
+            },
+        ),
+        Tool(
             name="find_input",
             description="Find the uploaded file from the user. This always searches the sandbox directory automatically.",
             parameters={
@@ -93,10 +115,10 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
             description=(
                 "For protein-ligand complexes and protein-only comlexes. This tool will prepare the PDB files:"
                 "One pdb file containing the protein only, without solvent and ligand."
-                "If a ligand is present, the pdb file containing the ligand only, without solvent and protein."
-                f"The ligand file is named {ligand_name}.pdb and is then protonated and saved to {ligand_name}_h.pdb. You should check the protonation of the ligand in the literature to make sure it has been properly protonated at the appropriate pH."
+                "If one or more ligands are present, one pdb file will be created per ligand, without solvent and protein."
+                f"If there is one ligand, the ligand file is named {ligand_name}.pdb and is then protonated and saved to {ligand_name}_h.pdb. You should check the protonation of the ligand in the literature to make sure it has been properly protonated at the appropriate pH."
+                f"If there are multiple ligands (i ligands), the ligand files are named {ligand_name}_i.pdb and is then protonated and saved to {ligand_name}_i_h.pdb.."
                 f"The output protein PDB file is named {pdb_id}_prepared.pdb."
-                f"The output ligand PDB file is named {ligand_name}_h.pdb."
             ),
             parameters={
                 "type": "object",
@@ -215,7 +237,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "description": (
                             "Input PDB structure file to be processed by tleap. "
                             "This file must exist in the provided sandbox_dir."
-                            f"If the PDB file was previously prepared and capped, input_pdb will be {pdb_id}_prepared_capped_his.pdb."
+                            f"If the PDB file was previously prepared, capped and proper histidines renamed, input_pdb will be {pdb_id}_prepared_capped_his.pdb."
                         ),
                     },
                     "pdb_id": {
@@ -229,6 +251,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
         Tool(
             name="param_ligand",
             description=(
+                "If the protein-ligand system contains more than one ligand, only the first one will be kept and parameterized. Nevertheless, the full list of ligands should be parsed as ligand_files."
                 "Parameterize a small molecule ligand using Amber's antechamber and parmchk2 utilities. "
                 "This tool generates the necessary files for including a ligand in molecular dynamics simulations. "
                 "It creates a mol2 file with assigned charges, a prepi file for the ligand, and a frcmod file containing any missing force field parameters. "
@@ -260,6 +283,14 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "type": "string",
                         "description": (
                             f"The three character residue name of the ligand to extract from the PDB file, in capital letters, called {ligand_name}."
+                        ),
+                    },
+                    "charge_ligand": {
+                        "type": "integer",
+                        "description": (
+                            "The net formal charge of the ligand (e.g. 0, 1, -1, 2). "
+                            "If not provided, it will be estimated from the structure via obabel. "
+                            "Provide this explicitly when the auto-detected charge causes antechamber to report an odd number of electrons."
                         ),
                     },
                 },
@@ -491,7 +522,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         ),
                     },
                 },
-                "required": ["sandbox_dir", "input_xtc"],
+                "required": ["sandbox_dir", "pdb_id", "input_xtc"] + (["ligand_name"] if ligand_name else []),
             },
         ),
         Tool(
@@ -533,6 +564,28 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                     },
                 },
                 "required": ["sandbox_dir", "pdb_id", "nsteps", "nstxout_compressed", "md_temp"],
+            },
+        ),
+        Tool(
+            name="grep_file",
+            description=(
+                "Search a file for lines matching a regex pattern. Returns matching lines with their line numbers. "
+                "Useful for inspecting specific parts of large files (e.g. finding HETATM lines in a PDB, checking specific residues, "
+                "finding errors in log files) without reading the entire file."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": f"Absolute path to the file to search. Must be inside the sandbox directory ({sandbox_dir}).",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "A regex pattern to match against each line of the file (e.g. '^HETATM', 'ERROR|FATAL', 'ILE A   2').",
+                    },
+                },
+                "required": ["path", "pattern"],
             },
         ),
         Tool(
