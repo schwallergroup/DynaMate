@@ -10,6 +10,7 @@ from src.agents import MDAgent, PrepAgent
 from src import utils
 from src import constants
 
+
 if constants.ENV_FILE.exists():
     load_dotenv(dotenv_path=constants.ENV_FILE)
 

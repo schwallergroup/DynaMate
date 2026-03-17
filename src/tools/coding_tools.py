@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 
@@ -54,6 +55,30 @@ def list_files(path: str) -> str:
         return f"Contents of {path}:\n" + "\n".join(items)
     except Exception as e:
         return f"Error listing files: {str(e)}"
+
+
+def grep_file(path: str, pattern: str) -> str:
+    """Search a file for lines matching a regex pattern and return them with line numbers."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        regex = re.compile(pattern)
+        matches = []
+        for i, line in enumerate(lines, start=1):
+            if regex.search(line):
+                matches.append(f"{i}: {line.rstrip()}")
+
+        if not matches:
+            return f"No matches for pattern '{pattern}' in {path}"
+
+        return f"Matches for '{pattern}' in {path} ({len(matches)} hits):\n" + "\n".join(matches)
+    except FileNotFoundError:
+        return f"File not found: {path}"
+    except re.error as e:
+        return f"Invalid regex pattern '{pattern}': {e}"
+    except Exception as e:
+        return f"Error searching file: {str(e)}"
 
 
 def edit_file(path: str, old_text: str, new_text: str) -> str:

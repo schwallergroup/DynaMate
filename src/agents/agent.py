@@ -20,6 +20,29 @@ class ToolOutputError(Exception):
     pass
 
 
+class _TrackedMessageList(list):
+    """A list that mirrors every append/extend to a separate full_log list.
+
+    ``self.messages`` is periodically summarized (trimmed) to fit the context
+    window, but ``full_log`` keeps every message ever appended so the JSONL
+    log and trace exporter can see the complete conversation including
+    error-recovery interactions.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.full_log: List[Dict[str, Any]] = list(self)
+
+    def append(self, item):
+        super().append(item)
+        self.full_log.append(item)
+
+    def extend(self, items):
+        items = list(items)
+        super().extend(items)
+        self.full_log.extend(items)
+
+
 class BaseAgent(ABC):
     def __init__(
         self,
@@ -43,7 +66,7 @@ class BaseAgent(ABC):
         self.model_supports_system_messages = model_supports_system_messages
 
         self.tool_schemas = None
-        self.messages: List[Dict[str, Any]] = []
+        self.messages: _TrackedMessageList = _TrackedMessageList()
         self.llm_cost = 0
 
         self.logger = utils.get_class_logger(self.__class__.__name__, log_file=self.sandbox_dir / "run.log")
@@ -55,8 +78,6 @@ class BaseAgent(ABC):
     @abstractmethod
     def _additional_check_for_errors_tool_output(self, tool_name, tool_call) -> bool:
         pass
-
-    import json
 
     def _count_tokens(self, text):
         if not isinstance(text, str):
@@ -188,7 +209,7 @@ class BaseAgent(ABC):
             else:
                 return str(msg)
 
-        safe_messages = [to_dict_safe(m) for m in self.messages]
+        safe_messages = [to_dict_safe(m) for m in self.messages.full_log]
         created_files = [f for f in os.listdir(self.sandbox_dir) if os.path.isfile(os.path.join(self.sandbox_dir, f))]
 
         # Build run log
@@ -211,7 +232,10 @@ class BaseAgent(ABC):
 
         if total_tokens > constants.MAX_CONTEXT_TOKENS and len(messages) > 3:
             messages = self._summarize_history(messages)
-            self.messages = messages
+            # Replace the working context but preserve the full log.
+            full_log = self.messages.full_log
+            self.messages = _TrackedMessageList(messages)
+            self.messages.full_log = full_log
 
         response = completion(
             model=self.model_name,
@@ -257,7 +281,7 @@ class BaseAgent(ABC):
         exec_result = self._safe_execute_tool(function_name, function_args)
         tool_output = utils.truncate_string(exec_result["output"])
         exec_result["output"] = tool_output
-        
+
         self.logger.info(f"Tool result: {tool_output}.")
 
         tool_message = self._format_tool_usage_ouput(tool_call.id, function_name, function_args, tool_output)

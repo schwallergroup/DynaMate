@@ -9,9 +9,28 @@ from collections import defaultdict, Counter
 
 logger = get_class_logger(__name__, log_to_file=False)
 
+
+def _filter_mdrun_output(output: str) -> str:
+    """Remove verbose mdrun simulation output from GROMACS log."""
+    output = re.sub(
+        r"Steepest Descents:.*?writing lowest energy coordinates\.\n?",
+        "", output, flags=re.DOTALL
+    )
+    output = re.sub(
+        r"starting mdrun 'Generic title'.*?Writing final coordinates\.\n?",
+        "", output, flags=re.DOTALL
+    )
+    output = re.sub(r"^GROMACS reminds you:.*$\n?", "", output, flags=re.MULTILINE)
+    output = re.sub(r"^Back Off! I just backed up.*$\n?", "", output, flags=re.MULTILINE)
+    
+    return output
+
+    
+
+
 def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_files=None) -> str:
-    # sometimes llm passes ligands as empty strings
-    if not ligand_name:
+    # sometimes llm passes ligands as empty strings or the string "None"
+    if not ligand_name or str(ligand_name).strip().lower() == "none":
         ligand_name = None
     if not ligand_files:
         ligand_file = None
@@ -323,7 +342,7 @@ gen_vel                 = no        ; velocity generation off after NVT
 
     if log_file_path.exists():
         try:
-            gromacs_output = log_file_path.read_text(encoding="utf-8")
+            gromacs_output = _filter_mdrun_output(log_file_path.read_text(encoding="utf-8"))
         except Exception as e:
             gromacs_output = f"Could not read GROMACS log file: {e}"
 
@@ -332,7 +351,7 @@ gen_vel                 = no        ; velocity generation off after NVT
                 f"--- Full GROMACS Log ---\n"
                 f"{gromacs_output}\n"
                 f"--- Shell Script Stderr ---\n"
-                f"{result.stderr or 'None captured directly'}") 
+                f"{result.stderr or 'None captured directly'}")
     else:
         return (f"Equilibration ran successfully. Full GROMACS output:\n"
                 f"{gromacs_output}")
@@ -342,6 +361,8 @@ def gromacs_production(sandbox_dir: str, input_gro: str, npt_cpt_file: str, md_t
     """
     Run production MD with GROMACS using prod_Gromacs.sh.
     """
+    if not ligand_name or str(ligand_name).strip().lower() == "none":
+        ligand_name = None
 
     # ---------- Create md.mdp file --------------
     nsteps = int(((float(md_duration)) * 1000000) / 2)  # Convert ns to number of steps (2 fs per step)
@@ -412,7 +433,7 @@ gen_vel                 = no        ; continuing from NPT equilibration
 
     if log_file_path.exists():
         try:
-            gromacs_output = log_file_path.read_text(encoding="utf-8")
+            gromacs_output = _filter_mdrun_output(log_file_path.read_text(encoding="utf-8"))
         except Exception as e:
             gromacs_output = f"Could not read GROMACS log file: {e}"
 
@@ -431,12 +452,19 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
     """
     Run production MD with GROMACS using prod_Gromacs.sh.
     """
+    if not ligand_name or str(ligand_name).strip().lower() == "none":
+        ligand_name = None
+
     script = constants.SCRIPTS_DIR / "analysis_Gromacs.sh"
     log_file_path = Path(f"{sandbox_dir}/gromacs_analysis.log")
 
     cmd = [str(script), input_xtc, log_file_path]
 
+<<<<<<< HEAD
     if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
+=======
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h", ""]:
+>>>>>>> b57c53e ([update] upskill and refinement fixed)
         cmd.append(ligand_name)
         cmd.append(f"{sandbox_dir}/{ligand_name}.gro")
 
@@ -523,7 +551,7 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
                 f"--- Full GROMACS Log ---\n"
                 f"{gromacs_output}\n"
                 f"--- Shell Script Stderr ---\n"
-                f"{result.stderr or 'None captured directly'}") 
+                f"{result.stderr or 'None captured directly'}")
     else:
         return (f"Analysis plots produced successfully. Full GROMACS output:\n"
                 f"{gromacs_output}")

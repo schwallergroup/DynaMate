@@ -8,7 +8,6 @@ from src.tools import tool_schema
 from src.agents.agent import BaseAgent
 from src.prompts import PREP_SYSTEM_PROMPT
 
-
 litellm.drop_params = True
 
 
@@ -41,7 +40,6 @@ class PrepAgent(BaseAgent):
             model_supports_system_messages
         )
 
-        self.messages: List[Dict[str, Any]] = []
         self.pdb_file_path = None
         self.user_temp = None
         self.agent_plan = ""
@@ -59,7 +57,9 @@ class PrepAgent(BaseAgent):
         self.agent_plan = ""
 
     def _setup_system_prompt(self) -> None:
-        system_prompt_text = PREP_SYSTEM_PROMPT.format(sandbox_dir=self.sandbox_dir)
+        system_prompt_text = PREP_SYSTEM_PROMPT.format(
+            sandbox_dir=self.sandbox_dir,
+        )
 
         system_prompt = {
             "role": "system",
@@ -152,39 +152,38 @@ class PrepAgent(BaseAgent):
         return None
 
     def _find_ligand(self):
-        lig_response = None
-
-        while lig_response is None:
+        while True:
             user_input = self.ligand_name
 
             if not user_input:
-                lig_response = True
                 self.logger.info("Defining system without a ligand")
+                return
 
-            else:
-                lig_name = re.search(r"^[A-Z0-9]{3}$", user_input)
-                if lig_name:
-                    self.logger.info(f"User requested ligand: {lig_name.group()}")
-                    self.ligand_name = lig_name.group()
-                    lig_response = True
-                    lig_found = False
-                    with open(self.pdb_file_path, "r") as infile:
-                        for line in infile:
-                            if line.startswith("HETATM") and self.ligand_name in line:
-                                lig_found = True
-                                break
+            lig_name = re.search(r"^[A-Z0-9]{3}$", user_input)
+            if not lig_name:
+                self.logger.error(
+                    f"'{user_input}' is not a valid 3-character ligand code."
+                )
+                self.ligand_name = input("Please enter the three character identifier for the ligand (or press Enter to skip): ").strip().upper() or None
+                continue
 
-                    if not lig_found:
-                        self.logger.error(
-                            "The ligand name could not be identified. Carefully enter the three character identifier for the ligand."
-                        )
-                        sys.exit(1)
+            self.ligand_name = lig_name.group()
+            self.logger.info(f"User requested ligand: {self.ligand_name}")
 
-                else:
-                    self.logger.error(
-                        "The ligand name could not be identified. Carefully enter the three character identifier for the ligand."
-                    )
-                    sys.exit(1)
+            lig_found = False
+            with open(self.pdb_file_path, "r") as infile:
+                for line in infile:
+                    if line.startswith("HETATM") and self.ligand_name in line:
+                        lig_found = True
+                        break
+
+            if lig_found:
+                return
+
+            self.logger.error(
+                f"Ligand '{self.ligand_name}' not found in {self.pdb_file_path}."
+            )
+            self.ligand_name = input("Please enter the correct three character identifier for the ligand (or press Enter to skip): ").strip().upper() or None
 
     def _find_simulation_temperature(self):
         temperature = self.md_temp

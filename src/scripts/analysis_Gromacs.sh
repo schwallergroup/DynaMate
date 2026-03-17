@@ -10,7 +10,7 @@ LOG_FILE="$2"
 > $LOG_FILE 
 FILENAME="${INPUT_XTC%.*}"
 
-# Optional fourth argument
+# Optional third argument: ligand name
 if [ "$#" -ge 3 ]; then
     LIGNAME="$3"
 else
@@ -38,22 +38,3 @@ if [ -n "$LIGNAME" ]; then
     # Ligand-Protein hydrogen bonds
     echo -e "1 \n 13" | $GMX hbond -s $FILENAME.tpr -f "$FILENAME"_noPBC.xtc -tu ns -num hbnum_prot_lig.xvg >> $LOG_FILE 2>&1
 fi
-
-# echo -e "Protein" \n "System" | gmx trjconv -s md.tpr -f md.xtc -o md_noPBC.xtc -pbc mol -center >> log 2>&1
-# # RMSD to initial structure
-# echo -e "Backbone" \n "Backbone" | gmx rms -s md.tpr -f md_noPBC.xtc -o rmsd.xvg -tu ns >> log.log 2>&1
-# # RMSD to crystal structure
-# echo -e "Backbone" \n "Backbone" | $GMX rms -s em.tpr -f "$FILENAME"_noPBC.xtc -o rmsd_xtal.xvg -tu ns >> $LOG_FILE 2>&1
-# echo -e "Backbone" \n "Backbone" | gmx rms -s em.tpr -f md_noPBC.xtc -o rmsd_xtal.xvg -tu ns
-# # RMSF
-# echo -e "C-alpha" | $GMX rmsf -s $FILENAME.tpr -f "$FILENAME"_noPBC.xtc -o rmsf.xvg -res >> $LOG_FILE 2>&1
-# # Radius of gyration
-# echo -e "Protein" | $GMX gyrate -s $FILENAME.tpr -f "$FILENAME"_noPBC.xtc -o gyrate.xvg >> $LOG_FILE 2>&1
-# # Hydrogen bonds
-# #echo -e "MainChain+H \n MainChain+H" | $GMX hbond -s md.tpr -f md_noPBC.xtc -tu ns -num hbnum_mainchain.xvg
-# echo -e "SideChain \n SideChain" | gmx hbond -s md.tpr -f md_noPBC.xtc -tu ns -num hbnum_sidechain.xvg
-# echo -e "Protein \n Water" | $GMX hbond -s $FILENAME.tpr -f "$FILENAME"_noPBC.xtc -tu ns -num hbnum_prot_wat.xvg >> $LOG_FILE 2>&1
-
-# echo -e "Protein \n Water" | $GMX hbond -s md.tpr -f md_noPBC.xtc -tu ns -num hbnum_prot_wat.xvg
-
-# echo -e "MainChain+H \n MainChain+H" | gmx hbond -s md.tpr -f md_noPBC.xtc -tu ns -num hbnum_mainchain.xvg

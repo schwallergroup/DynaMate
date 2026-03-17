@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # load your environment
-source ~/miniforge3/bin/activate dynamate
+source $(conda info --base)/bin/activate dynamate
 
 # Activate GROMACS environment
 if [ -f /usr/local/gromacs/bin/GMXRC ]; then
@@ -10,9 +10,6 @@ else
     echo "Error: /usr/local/gromacs/bin/GMXRC not found!"
     return 1 2>/dev/null || exit 1
 fi
-
-# Export Python path to current project
-export PYTHONPATH=$(pwd)
 
 echo "PYTHONPATH set to: $PYTHONPATH"
 echo "Environment setup complete!"

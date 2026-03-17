@@ -229,11 +229,11 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
                 return e[0] + e[1].lower()
             return e
 
-        with open(protonated_file, "r") as infile:
-            lines = infile.readlines()
+            with open(protonated_file, "r") as infile:
+                lines = infile.readlines()
 
-        counters = defaultdict(int)
-        new_lines = []
+            counters = defaultdict(int)
+            new_lines = []
 
         for idx, line in enumerate(lines, start=1):
             if line.startswith(("ATOM", "HETATM")):
@@ -249,29 +249,28 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
                         f'Unknown element "{element}" (from raw field "{raw_element.strip()}") found at line {idx}. Atom name in file: "{raw_name}". Please check the ligand PDB: unexpected element.'
                     )
 
-                    # keep the line unchanged
-                    new_lines.append(line)
-                    continue
+                        # keep the line unchanged
+                        new_lines.append(line)
+                        continue
 
-                # Known element → rename it
-                counters[element] += 1
-                new_name = f"{element}{counters[element]}"
+                    # Known element → rename it
+                    counters[element] += 1
+                    new_name = f"{element}{counters[element]}"
 
-                # Replace atom name in columns 13–16
-                line = f"{line[:12]}{new_name:>4}{line[16:]}"
+                    # Replace atom name in columns 13–16
+                    line = f"{line[:12]}{new_name:>4}{line[16:]}"
 
-            new_lines.append(line)
+                new_lines.append(line)
 
-        with open(protonated_file, "w") as outfile:
-            outfile.writelines(new_lines)
+            with open(protonated_file, "w") as outfile:
+                outfile.writelines(new_lines)
 
-        logger.info("Atom renaming of ligand completed.")
+            logger.info("Atom renaming of ligand completed.")
 
-        if num_ligands == 1:
-            return f"Successfully Prepared PDB structure with a ligand and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)"
-        if num_ligands > 1:
-            return f"Successfully Prepared PDB structure with {num_ligands} ligands and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}.pdb and the {num_ligands} protonated ligand PDB files to {sandbox_dir}/{list_protonated_files}. This list of {num_ligands} protonated files: {list_protonated_files} is IMPORTANT and should be the input parameter for future functions. The extracted pdb file was saved to {sandbox_dir}/{pdb_id}_prepared.pdb Ligands were protonated at pH=7 and atom names were cleaned (renumbered)"
-
+            if num_ligands == 1:
+                return f"Successfully Prepared PDB structure with a ligand and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)"
+            if num_ligands > 1:
+                return f"Successfully Prepared PDB structure with {num_ligands} ligands and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}.pdb and the {num_ligands} protonated ligand PDB files to {sandbox_dir}/{list_protonated_files}. This list of {num_ligands} protonated files: {list_protonated_files} is IMPORTANT and should be the input parameter for future functions. The extracted pdb file was saved to {sandbox_dir}/{pdb_id}_prepared.pdb Ligands were protonated at pH=7 and atom names were cleaned (renumbered)"
 
     return f"Successfully Prepared PDB structure without a ligand and saved the extracted PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb"
 

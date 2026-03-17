@@ -6,13 +6,12 @@ import litellm
 from src.agents.agent import BaseAgent, ToolOutputError
 from src.prompts import MD_SYSTEM_PROMPT
 from src.tools import tool_schema
+from src.constants import MAX_ITERATIONS
 
 litellm.drop_params = True 
 
 
 class MDAgent(BaseAgent):
-    MAX_ITERATION = 35
-    MAX_ITERATION_BFE = 5
     ESSENTIAL_STEPS = {
         "prepare_pdb_file_ligand",
         "add_caps",
@@ -35,6 +34,7 @@ class MDAgent(BaseAgent):
         md_duration=None,
         model_supports_system_messages=True,
         plan: Dict[str, Any] = None,
+        post_pipeline_chat: bool = True,
     ):
         super().__init__(
             model_name,
@@ -49,6 +49,7 @@ class MDAgent(BaseAgent):
 
         self.structure_path = Path(structure_path)
         self.plan = plan
+        self.post_pipeline_chat = post_pipeline_chat
 
         self.completed_steps = []
         self.completed_summary = ""
@@ -143,8 +144,9 @@ class MDAgent(BaseAgent):
         return True
 
     def _reset_pipeline(self):
+        from src.agents.agent import _TrackedMessageList
         self.completed_steps = []
-        self.messages = []
+        self.messages = _TrackedMessageList()
         self.completed_summary = ""
 
     def _validate_and_setup(self) -> bool:
@@ -163,7 +165,10 @@ class MDAgent(BaseAgent):
 
     def _setup_system_prompt(self) -> None:
         plan_text = json.dumps(self.plan, indent=2) if self.plan else "No plan provided."
-        system_prompt_text = MD_SYSTEM_PROMPT.format(pdb_path=self.structure_path, sandbox_dir=self.sandbox_dir)
+        system_prompt_text = MD_SYSTEM_PROMPT.format(
+            pdb_path=self.structure_path,
+            sandbox_dir=self.sandbox_dir,
+        )
 
         system_context = (
             f"{system_prompt_text}\n\n"
@@ -211,7 +216,18 @@ class MDAgent(BaseAgent):
             ),
         })
 
-        for iteration in range(1, self.MAX_ITERATION + 1):
+        # Phase 1: run until the pipeline is successful
+        iteration = 0
+        while not self._pipeline_successful():
+            iteration += 1
+
+            if iteration == MAX_ITERATIONS:
+                print(f"\n[Warning] Pipeline has reached {MAX_ITERATIONS} iterations without completing.")
+                answer = input("Would you like to quit and get a summary of what went wrong? (yes/no): ").strip().lower()
+                if answer in ("yes", "y"):
+                    self.logger.info(f"User chose to quit after {iteration} iterations.")
+                    return
+
             try:
                 response = self._call_llm(self.messages)
                 tool_calls = response.tool_calls
@@ -226,29 +242,32 @@ class MDAgent(BaseAgent):
                     self.messages.append({"role": "assistant", "content": response.content})
                     if response.content:
                         print(f"\nAgent: {response.content}")
-                    user_input = input("You (press Enter to finish): ").strip()
-                    if not user_input:
-                        self.logger.info(f"Agent finished after {iteration} iteration(s).")
-                        break
+                    else:
+                        print("\nAgent: I need your input to continue.")
+                    user_input = input("You: ").strip()
                     self.messages.append({"role": "user", "content": user_input})
 
             except Exception as e:
                 self.logger.error(str(e))
                 self.messages.append({"role": "user", "content": f"An error occurred: {e}"})
 
-        return remaining_steps
+        if not self.post_pipeline_chat:
+            return
 
-    def _run_bfe(self, prompt):
-        # Inject the task prompt once before the loop
-        self.messages.append({"role": "user", "content": prompt})
+        # Phase 2: pipeline complete — open conversation until user presses Enter to exit
+        self.logger.info("Pipeline successful. Entering post-pipeline conversation.")
+        self.messages.append({
+            "role": "user",
+            "content": "The pipeline has completed successfully. Let the user know and ask if there is anything else you can help with (e.g. further analysis, binding free energy calculation).",
+        })
 
-        for iteration in range(1, self.MAX_ITERATION_BFE + 1):
+        while True:
             try:
                 response = self._call_llm(self.messages)
                 tool_calls = response.tool_calls
 
                 if tool_calls:
-                    self.logger.info(f"BFE iteration {iteration}: {len(tool_calls)} tool call(s)")
+                    self.logger.info(f"Post-pipeline: {len(tool_calls)} tool call(s)")
                     self.messages.append(response)
                     for tool_call in tool_calls:
                         exec_result = self._process_tool_call(tool_call)
@@ -257,9 +276,9 @@ class MDAgent(BaseAgent):
                     self.messages.append({"role": "assistant", "content": response.content})
                     if response.content:
                         print(f"\nAgent: {response.content}")
-                    user_input = input("You (press Enter to finish): ").strip()
+                    user_input = input("You (press Enter to exit): ").strip()
                     if not user_input:
-                        self.logger.info(f"BFE agent finished after {iteration} iteration(s).")
+                        self.logger.info("User exited post-pipeline conversation.")
                         break
                     self.messages.append({"role": "user", "content": user_input})
 
@@ -321,9 +340,6 @@ class MDAgent(BaseAgent):
                 missing_or_empty.append(resolved)
 
         if missing_or_empty:
-            self.logger.error(
-                f"Pipeline incomplete: missing final outputs {missing_or_empty}"
-            )
             return False
 
         return True
@@ -371,21 +387,10 @@ class MDAgent(BaseAgent):
         self._setup_system_prompt()
 
         remaining_steps = self._get_initial_steps()
-        remaining_steps = self._run_agent(remaining_steps)
+        self._run_agent(remaining_steps)
 
+        # _run_agent only returns after the user exits — pipeline is guaranteed successful here
         success = self._pipeline_successful()
-
-        if self.ligand_name and success:
-            user_prompt = "\n==========\nWould you like me to calculate the free energy of binding for your protein-ligand system using the MMPBSA tool? (yes/no) \n\n"
-
-            user_answer = input(user_prompt).strip().lower()
-
-            if user_answer in ("yes", "y"):
-                self.logger.info("Running MMPBSA calculation...")
-                prompt = "Calculate the free energy of binding for the protein-ligand system using the MMPBSA method."
-                bfe = self._run_bfe(prompt)
-            else:
-                self.logger.info("Skipping MMPBSA calculation.")
 
         self._generate_and_log_summary(success)
         self._create_logs()
