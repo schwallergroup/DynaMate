@@ -2,12 +2,15 @@
   <img src="assets/DynaMate.svg" alt="drawing" width="250"/>
 </p>
 
-DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipt with a collection of tools. Quality checks throughout the pipeline trigger re-tries when something goes wrong, allowing the agent to correct course and save you time on debugging. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
+DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipped with a collection of tools for the full GROMACS/AMBER workflow. Quality checks throughout the pipeline trigger retries when something goes wrong, allowing the agent to correct course and save you time on debugging. The agent communicates interactively — asking clarifying questions, validating parameters, and answering follow-up questions about results. Successful runs can be distilled into reusable skills via the [upskill](https://github.com/huggingface/upskill) framework, improving the performance of cheaper models on future simulations. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
 
 ## Key features
 * :rocket: Autonomous protein-ligand MD simulations and binding affinity calculations
-* :arrows_counterclockwise: Error analysis and correction
+* :arrows_counterclockwise: Error analysis and automatic correction with retry logic
 * :bar_chart: Binding affinity calculations with MM/PB(GB)SA method
+* :speech_balloon: Interactive agent chat — the agent asks clarifying questions and accepts follow-up queries after the pipeline completes
+* :sparkles: Upskilling — distill successful runs into reusable skills that improve cheaper/weaker models
+* :books: Literature-informed parameters via PaperQA search over your own PDFs
 
 ## Software setup
 The tools used by the agent require that you have a local installation of the following software. We provide a Docker image with all dependencies pre-installed (recommended), or you can install everything manually if you prefer
@@ -28,8 +31,9 @@ docker build -t dynamate -f ./docker/Dockerfile .
 2. Create an `.env` file to store sensitive data like API keys:
 
 ```
-OPENROUTER_API_KEY=your_key_here
-# Add other keys as needed
+OPENROUTER_API_KEY=your_key_here        # Required: used by the MD pipeline via LiteLLM
+ANTHROPIC_API_KEY=your_key_here         # Required for upskill generation/refinement (Claude Sonnet 4)
+OPENAI_API_KEY=your_key_here            # Optional: used by PaperQA for literature search
 ```
 
 3. Run the agent:
@@ -187,7 +191,7 @@ After setting up your project environment, make sure to run the setup script if 
 ```bash
 source setup.sh
 ```
-Now you are ready to use DynaMate! 
+Now you are ready to use DynaMate!
 ## Usage
 To launch the script specify the model name in the command line arguments. For example, to launch the agent with GPT-5 mini:
 ```bash
@@ -195,17 +199,102 @@ python main.py --model openrouter/openai/gpt-5-mini
 ```
 You can optionally specify:
 ```
---pdb-id <protein you would like to run MD for, default: prompted at runtime>
---ligand <ligand you would like to run MD with, default: prompted at runtime>
+--pdb-id <4-character PDB ID, default: agent asks interactively>
+--ligand <3-letter ligand code; omit for protein-only simulation>
 --temp <simulation temperature (K), default: chosen by the agent>
 --duration <simulation duration (ns), default: chosen by the agent>
+--upskill <export agent trace on success for skill generation>
+--model-supports-system-messages <set to False for models without system message support, default: True>
 ```
+
+### Interactive workflow
+
+When `--pdb-id` is omitted, the PrepAgent will interactively ask you for a PDB ID and (optionally) a ligand code, validate your input, and confirm before proceeding. The agent may also ask clarifying questions about simulation parameters.
+
+After the MD pipeline completes, the MDAgent enters a chat mode where you can ask follow-up questions about the results (e.g. interpreting the RMSD plot). Press Enter on an empty line to finish the session.
+
+### Pipeline overview
+
+1. **PrepAgent** — Fetches and prepares the PDB structure, identifies ligands, searches your literature (if `my_papers/` exists), and generates a simulation plan with parameters.
+2. **MDAgent** — Executes the full GROMACS/AMBER workflow: PDB preparation, ligand parameterization (if applicable), topology building with tleap, energy minimization, NVT/NPT equilibration, production MD (default 0.1 ns), and trajectory analysis (RMSD, RMSF, radius of gyration, hydrogen bonds). Results are saved to `analysis.txt`. If any step fails, the agent analyzes the error and retries with corrected inputs.
 
 And again, happy molecular dynamics simulations! 🧬
 
 <p align="center">
   <img src="assets/MDAgent-Tools-workflow.png" alt="drawing" width="900"/>
 </p>
+
+## Upskilling
+
+DynaMate supports an upskilling workflow that distills knowledge from successful agent runs into reusable skills, improving the performance of weaker or cheaper models on future runs.
+
+Skills are generated using [upskill](https://github.com/huggingface/upskill)'s Python API and require an `ANTHROPIC_API_KEY` in your `.env` file (separate from the `OPENROUTER_API_KEY` used for running the pipeline).
+
+### How it works
+
+1. **Run the pipeline** with a capable model and pass `--upskill` to export the agent trace automatically on success:
+```bash
+python main.py --model openrouter/openai/gpt-5-mini --pdb-id 6JJ3 --ligand UNL --upskill
+```
+
+2. **Generate a skill** from the exported trace:
+```bash
+python generate_skill.py
+```
+This extracts error-recovery patterns from the trace (tool failures and how the agent resolved them) and passes them as concrete examples to upskill's `generate_skill()` API. The resulting skill is saved under `skills/` and automatically injected into both the PrepAgent and MDAgent system prompts on all future runs. Multiple skill files accumulate — the agent benefits from all of them (newest first, up to ~4000 tokens total).
+
+3. **Evaluate skill impact** by running a baseline vs. skilled comparison on one or more test systems. Each system independently selects protein-only or protein-ligand evaluation criteria:
+```bash
+python generate_skill.py --eval-only \
+  --compare-systems 6JJ3_UNL 1FDH_None \
+  --compare-model openrouter/anthropic/claude-haiku-4-5
+```
+This runs the full pipeline twice per system (without skill, then with skill) and prints a step-by-step comparison table with completion ratios and a delta score. If the skilled run does not complete successfully, the skill is automatically refined based on the failed steps and saved. You can optionally fix the simulation parameters to keep evaluation runs consistent:
+```bash
+python generate_skill.py --eval-only \
+  --compare-systems 1J37_None \
+  --compare-model openrouter/openai/gpt-4.1-mini \
+  --compare-temp 300 --compare-duration 0.01
+```
+If `--compare-temp` and `--compare-duration` are omitted, PrepAgent chooses them automatically.
+
+4. **Score an existing run** against expected output files without re-running the agent:
+```bash
+python generate_skill.py --eval-only \
+  --eval-systems "6JJ3_UNL:sandbox/run_20260310_121949"
+```
+
+### Evaluation criteria
+
+Success is measured by non-empty output files in the sandbox directory. The expected files differ by system type:
+
+- **Protein-only**: preparation → tleap → GROMACS equilibration → production → analysis
+- **Protein-ligand**: preparation → ligand parameterization → tleap → GROMACS equilibration → production → analysis
+
+Each pipeline step is scored independently (0.0–1.0), with an overall score and a `pipeline_successful` flag (all steps == 1.0).
+
+### generate_skill.py options
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--run-index` | `-1` | Which run to use from the log (0 = first, -1 = last) |
+| `--skill-name` | `md-run-<timestamp>` | Name for the generated skill directory |
+| `--eval-only` | False | Skip generation; run evaluation only |
+| `--compare-systems` | `[]` | Systems for baseline vs. skilled comparison (`PDBID_LIGAND` or `PDBID_None`) |
+| `--compare-model` | default model | Model to use for comparison runs |
+| `--compare-temp` | None | Fixed temperature for comparison runs (K) |
+| `--compare-duration` | None | Fixed duration for comparison runs (ns) |
+| `--eval-systems` | `[]` | Score an existing sandbox: `PDBID_LIGAND:path/to/sandbox` |
+| `--eval-model` | `[]` | Run legacy upskill Q&A eval on a model (not recommended for MD) |
+| `--eval-runs` | `3` | Number of runs for legacy Q&A eval |
+
+### Paper search
+
+If you have a `my_papers/` directory containing relevant PDFs, the PrepAgent can search them to inform simulation parameters. An `OPENAI_API_KEY` is required for this feature (used by PaperQA for embeddings and retrieval). Add it to your `.env` file:
+```
+OPENAI_API_KEY=your_key_here
+```
+The first run indexes all PDFs and caches them in `my_docs.pkl` for fast subsequent queries.
 
 ## Citation
 If you found this code useful, please consider citing:

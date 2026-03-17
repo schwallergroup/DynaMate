@@ -7,6 +7,7 @@ import litellm
 from src.tools import tool_schema
 from src.agents.agent import BaseAgent
 from src.prompts import PREP_SYSTEM_PROMPT
+from src.upskill.skill_loader import load_all_skills
 
 
 litellm.drop_params = True
@@ -59,7 +60,11 @@ class PrepAgent(BaseAgent):
         self.agent_plan = ""
 
     def _setup_system_prompt(self) -> None:
-        system_prompt_text = PREP_SYSTEM_PROMPT.format(sandbox_dir=self.sandbox_dir)
+        skill_context = load_all_skills()
+        system_prompt_text = PREP_SYSTEM_PROMPT.format(
+            sandbox_dir=self.sandbox_dir,
+            skill_context=skill_context,
+        )
 
         system_prompt = {
             "role": "system",

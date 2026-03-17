@@ -1,5 +1,6 @@
 from pathlib import Path
 
+MAX_ITERATIONS = 25
 MAX_CHARACTERS_TO_LOG = 5000
 SUMMARY_OUTPUT_TOKENS = 6000
 MAX_CONTEXT_TOKENS = 32000
@@ -17,3 +18,19 @@ AGENT_LOGS = Path(__file__).resolve().parent.parent / "agent_logs"
 JSON_LOG_FILE = AGENT_LOGS / "agent_runs.jsonl"
 
 MMPBSA_ENV_DIR = Path("/path/to/your/envs/mmpbsa")
+
+SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
+SKILL_MODEL = "claude-sonnet-4-20250514"
+MAX_SKILL_CHARS = 16000
+ERROR_KEYWORDS = (
+    "failed with return code",
+    "tleap run failed",
+    "ligand parameterization failed",
+    "parmed failed",
+    "error:",
+    "fatal:",
+    "cannot find",
+    "not found",
+    "exception",
+    "traceback",
+)

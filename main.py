@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from src.agents import MDAgent, PrepAgent
 from src import utils
 from src import constants
+from src.upskill.trace_exporter import export_last_run
 
 if constants.ENV_FILE.exists():
     load_dotenv(dotenv_path=constants.ENV_FILE)
@@ -50,6 +51,9 @@ class CommandLineArgs:
     "Simulation length in nanoseconds."
 
     model_supports_system_messages: bool = True
+
+    upskill: bool = False
+    "After a successful run, export the agent trace so you can run generate_skill.py to upskill a cheaper model."
 
 
 def main(config: CommandLineArgs):
@@ -111,6 +115,16 @@ def main(config: CommandLineArgs):
         root_logger.error("=== MD Pipeline failed or incomplete ===")
     else:
         root_logger.info("=== MD Pipeline completed successfully ===")
+
+    if config.upskill and result:
+        trace_path = export_last_run()
+        root_logger.info(f"Agent trace exported to: {trace_path}")
+        root_logger.info(
+            "To generate a skill for cheaper models, run:\n"
+            f"  python generate_skill.py\n"
+            "To also evaluate on a target model:\n"
+            f"  python generate_skill.py --eval-model haiku"
+        )
 
 
 if __name__ == "__main__":
