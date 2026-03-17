@@ -10,8 +10,8 @@ import time
 logger = get_class_logger(__name__, log_to_file=False)
 
 def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_files=None) -> str:
-    # sometimes llm passes ligands as empty strings
-    if not ligand_name:
+    # sometimes llm passes ligands as empty strings or the string "None"
+    if not ligand_name or str(ligand_name).strip().lower() == "none":
         ligand_name = None
     if not ligand_files:
         ligand_file = None
@@ -291,6 +291,8 @@ def gromacs_production(sandbox_dir: str, input_gro: str, npt_cpt_file: str, md_t
     """
     Run production MD with GROMACS using prod_Gromacs.sh.
     """
+    if not ligand_name or str(ligand_name).strip().lower() == "none":
+        ligand_name = None
 
     # ---------- Create md.mdp file --------------
     nsteps = int(((float(md_duration)) * 1000000) / 2)  # Convert ns to number of steps (2 fs per step)
@@ -380,6 +382,9 @@ def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
     """
     Run production MD with GROMACS using prod_Gromacs.sh.
     """
+    if not ligand_name or str(ligand_name).strip().lower() == "none":
+        ligand_name = None
+
     script = constants.SCRIPTS_DIR / "analysis_Gromacs.sh"
     log_file_path = Path(f"{sandbox_dir}/gromacs_analysis.log")
 

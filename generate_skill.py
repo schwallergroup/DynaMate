@@ -19,10 +19,17 @@ from src.upskill.trace_exporter import export_run, extract_error_examples
 
 load_dotenv(dotenv_path=constants.ENV_FILE)
 
-logger = utils.get_class_logger(
-    "GenerateSkill",
-    log_file=constants.AGENT_LOGS / "generate_skill.log",
-)
+# Module-level logger — initially stdout-only; main() re-points it to the
+# appropriate log file once the output directory is known.
+logger = utils.get_class_logger("GenerateSkill", log_to_file=False)
+
+
+def _setup_logger(log_file: Path) -> None:
+    """Re-configure the module logger to also write to *log_file*."""
+    global logger
+    # Drop existing handlers to avoid duplicates when called multiple times.
+    logger.handlers.clear()
+    logger = utils.get_class_logger("GenerateSkill", log_file=log_file)
 
 # System prompt for MD-specific refinement — removes the 200-400 word limit
 # from upskill's default GENERATION_PROMPT since MD skills require more detail.
@@ -225,6 +232,10 @@ def main(args: Args) -> None:
     skill_dir = constants.SKILLS_DIR / skill_name
 
     if not args.eval_only:
+        # Log into the skill directory alongside SKILL.md
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        _setup_logger(skill_dir / "generate.log")
+
         # Step 1: export trace (kept for reference / manual inspection)
         logger.info(f"Exporting run {args.run_index} from {constants.JSON_LOG_FILE} ...")
         trace_path = export_run(run_index=args.run_index, output_path=args.trace_output)
@@ -238,7 +249,6 @@ def main(args: Args) -> None:
                 logger.info(f"  • {ex[:100]}{'...' if len(ex) > 100 else ''}")
 
         logger.info(f"Generating skill '{skill_name}' with {SKILL_MODEL} ...")
-        skill_dir.mkdir(parents=True, exist_ok=True)
         try:
             skill = asyncio.run(_generate_skill_async(error_examples))
         except Exception as e:
@@ -283,6 +293,10 @@ def main(args: Args) -> None:
         for system_name in args.compare_systems:
             run_id = utils.time_now()
             base_dir = constants.DATA_DIR / f"compare_{run_id}_{system_name}"
+
+            # Log comparison orchestration into the comparison base directory
+            base_dir.mkdir(parents=True, exist_ok=True)
+            _setup_logger(base_dir / "eval.log")
 
             logger.info(f"[{system_name}] Running BASELINE (no skill) ...")
             baseline = _run_agent_and_score(
