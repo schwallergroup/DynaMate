@@ -40,10 +40,13 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
     if num_systems == 0:
         logger.warning("No system entries found. No changes made.")
         sys.exit(0)
-    
-    with open(f"{sandbox_dir}/topol_without_posre.top", "r") as f:
-        if re.search(r"system1\s+2", f.read()):
-            logger.info(f"Detected 2 chain(s) because of 2 identical chains named system1 in topol.top")
+            
+    identical_chains = re.findall(r"system1\s+(\d+)", text)
+
+    if identical_chains:
+        i = int(identical_chains[0])
+        if i > 1:
+            logger.info(f"Detected {i} identical chains named system1. Only one psosre file will be created for the first chain, and the same restraints will be applied to all identical chains named system1.")
         else:
             logger.info(f"Detected {num_systems} chain(s): {', '.join(systems)}")
 
@@ -252,7 +255,7 @@ gen_vel                 = no        ; velocity generation off after NVT
     script = constants.SCRIPTS_DIR / "equil_Gromacs.sh"
     log_file_path = Path(f"{sandbox_dir}/gromacs_equil.log")
 
-    cmd = [str(script), sandbox_dir, input_gro, log_file_path]
+    cmd = [str(script), sandbox_dir, input_gro, str(num_systems), log_file_path]
 
     if ligand_file is not None:
         obabel_cmd = f"obabel {ligand_file} -O {sandbox_dir}/{ligand_name}.gro"
@@ -372,7 +375,7 @@ gen_vel                 = no        ; continuing from NPT equilibration
                 f"--- Shell Script Stderr ---\n"
                 f"{result.stderr or 'None captured directly'}")
     else:
-        return (f"Equilibration ran successfully. Full GROMACS output:\n"
+        return (f"Production ran successfully. Full GROMACS output:\n"
                 f"{gromacs_output}")
 
 
@@ -406,5 +409,5 @@ def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
                 f"--- Shell Script Stderr ---\n"
                 f"{result.stderr or 'None captured directly'}") 
     else:
-        return (f"Equilibration ran successfully. Full GROMACS output:\n"
+        return (f"Analysis plots produced successfully. Full GROMACS output:\n"
                 f"{gromacs_output}")
