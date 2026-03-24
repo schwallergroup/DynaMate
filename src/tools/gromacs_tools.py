@@ -5,7 +5,6 @@ import shutil
 import sys
 from src import constants
 from src.utils import get_class_logger
-import time
 from collections import defaultdict, Counter
 
 logger = get_class_logger(__name__, log_to_file=False)
@@ -18,106 +17,154 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
         ligand_file = None
     else:
         ligand_file=ligand_files[0]
-        
-    # ------------ Modify topol.top to include position restraints ------------
 
-    input_path = Path(f"{sandbox_dir}/topol.top")
-    backup_path = Path(f"{sandbox_dir}/topol_without_posre.top")
-
-    if not input_path.exists():
-        raise FileNotFoundError(f"{input_path} not found.")
-
-    # Make a backup
-    shutil.copyfile(input_path, backup_path)
-    logger.info(f"Backup created: {backup_path}")
-
-    text = input_path.read_text(encoding="utf-8", errors="replace")
-
-    # --- Detect all system names (system, system1, system2, etc.) ---
-    system_matches = re.findall(r"^\s*(system\d*?)\b", text, flags=re.M)
-    systems = sorted(set(system_matches), key=lambda x: int(re.search(r"\d*$", x).group() or 0))
-    num_systems = len(systems)
-
-    if num_systems == 0:
-        logger.warning("No system entries found. No changes made.")
-        sys.exit(0)
-            
-    identical_chains = re.findall(r"system1\s+(\d+)", text)
-
-    if identical_chains:
-        i = int(identical_chains[0])
-        if i > 1:
-            logger.info(f"Detected {i} identical chains named system1. Only one psosre file will be created for the first chain, and the same restraints will be applied to all identical chains named system1.")
-        else:
-            logger.info(f"Detected {num_systems} chain(s): {', '.join(systems)}")
-
-    # --- Create posre include block ---
-    def make_posre_block(posre_file):
-        return f'; Include Position restraint file\n#ifdef POSRES\n#include "{posre_file}"\n#endif\n\n'
-
-    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
-        ligand_posre_block = (
-            f'; Include Position restraint file\n#ifdef POSRES\n#include "posre_{ligand_name}.itp"\n#endif\n\n'
+    # Helper functions
+    def _make_posre_block(posre_file: str) -> str:
+        return (
+            f'; Include Position restraint file\n'
+            f'#ifdef POSRES\n'
+            f'#include "{posre_file}"\n'
+            f'#endif\n\n'
         )
 
-    # --- Split by [ moleculetype ] sections ---
-    header_re = re.compile(r"^\[\s*moleculetype\s*\]", flags=re.I | re.M)
-    headers = list(header_re.finditer(text))
+    def _parse_protein_mol_types(text: str) -> list[str]:
+        """
+        Parse the [ molecules ] section and return unique protein molecule type
+        names (system*) in first-seen order.
 
-    # If there are no [ moleculetype ] sections, exit
+        Handles both formats:
+            system1    2          ← two identical chains of type system1
+            system1    1          ← followed later by another system1 entry
+            system2    1
+        """
+        in_molecules = False
+        seen: dict[str, None] = {}   # ordered set (insertion-ordered dict)
+
+        for line in text.splitlines():
+            stripped = line.strip()
+
+            # Detect section header
+            if re.match(r'^\[\s*molecules\s*\]', stripped, re.I):
+                in_molecules = True
+                continue
+
+            # Stop at next section header
+            if in_molecules and re.match(r'^\[', stripped):
+                break
+
+            # Skip blanks and comments
+            if not stripped or stripped.startswith(';'):
+                continue
+
+            if in_molecules:
+                parts = stripped.split()
+                if len(parts) >= 2 and re.match(r'^system\d*$', parts[0], re.I):
+                    mol = parts[0]
+                    if mol not in seen:
+                        seen[mol] = None
+
+        return list(seen.keys())
+    
+    # Modify topol.top to include position restraints
+    sandbox_dir = Path(sandbox_dir)
+    input_path  = sandbox_dir / "topol.top"
+    backup_path = sandbox_dir / "topol_without_posre.top"
+ 
+    if not input_path.exists():
+        raise FileNotFoundError(f"{input_path} not found.")
+ 
+    # Normalise ligand_name
+    _skip_ligand = {"None", "XXX", "None_h", None, ""}
+    handle_ligand = ligand_name not in _skip_ligand
+ 
+    # Backup
+    shutil.copyfile(input_path, backup_path)
+    logger.info(f"Backup created: {backup_path}")
+ 
+    text = input_path.read_text(encoding="utf-8", errors="replace")
+ 
+    # ── 1. Discover protein molecule types from [ molecules ] ─────────────────
+    protein_mol_types: list[str] = _parse_protein_mol_types(text)
+    logger.info(f"Protein molecule types found in [ molecules ]: {protein_mol_types}")
+ 
+    if not protein_mol_types:
+        logger.warning("No protein chain entries (system*) found in [ molecules ]. "
+                       "No position restraints inserted.")
+        return
+ 
+    # ── 2. Find the extent of [ moleculetype ] sections ──────────────────────
+    # Everything from the first [ moleculetype ] up to [ system ] / [ molecules ]
+    next_non_mol = re.search(
+        r'^\[\s*(system|molecules)\s*\]', text, flags=re.I | re.M
+    )
+    end_of_moltypes = next_non_mol.start() if next_non_mol else len(text)
+ 
+    header_re = re.compile(r'^\[\s*moleculetype\s*\]', flags=re.I | re.M)
+    headers   = [m for m in header_re.finditer(text) if m.start() < end_of_moltypes]
+ 
     if not headers:
         logger.warning("No [ moleculetype ] sections found. No changes made.")
-        sys.exit(0)
-
-    # Get the position of the first non-moleculetype section (e.g., [ system ])
-    next_non_moleculetype = re.search(r"^\[\s*(system|molecules)\s*\]", text, flags=re.I | re.M)
-    end_of_moleculetype = next_non_moleculetype.start() if next_non_moleculetype else len(text)
-
-    # Define the boundaries for moleculetype sections
-    positions = [m.start() for m in headers if m.start() < end_of_moleculetype] + [end_of_moleculetype]
-    preamble = text[: positions[0]]
-    segments = []
-    inserted_blocks = []
-    inserted_ligand = False
-
-    # Loop over each [ moleculetype ] block
+        return
+ 
+    positions = [m.start() for m in headers] + [end_of_moltypes]
+    preamble  = text[: positions[0]]
+ 
+    # ── 3. Walk each [ moleculetype ] block and insert POSRES if needed ───────
+    segments: list[str]    = []
+    inserted_protein: set  = set()   # unique types already given a posre block
+    inserted_ligand        = False
+    report: list[str]      = []
+ 
     for i in range(len(positions) - 1):
         seg = text[positions[i] : positions[i + 1]]
-
-        # Only modify real moleculetype blocks
-        match = re.search(r"^\s*(system\d*|system)\b\s+\d+", seg, flags=re.M)
-
-        if match:
-            system_name = match.group(1)
-            chain_index = re.search(r"\d+$", system_name)
-            chain_num = int(chain_index.group()) if chain_index else 1
-
-            posre_file = f"posre_chain{chain_num}.itp" if num_systems > 1 else "posre.itp"
-            posre_block = make_posre_block(posre_file)
-
+ 
+        # Extract molecule name from the "<name>  <nrexcl>" line that follows
+        # the [ moleculetype ] header.
+        name_match = re.search(
+            r'^\[\s*moleculetype\s*\][^\[]*?^\s*(\S+)\s+\d+',
+            seg, flags=re.I | re.M | re.S
+        )
+        mol_name = name_match.group(1) if name_match else None
+ 
+        # ── Protein chain ──────────────────────────────────────────────────
+        if mol_name and mol_name in protein_mol_types:
+            if mol_name not in inserted_protein:
+                posre_file  = f"posre_{mol_name}.itp"
+                posre_block = _make_posre_block(posre_file)
+                if posre_block not in seg:
+                    seg = seg.rstrip() + "\n\n" + posre_block
+                    report.append(mol_name)
+                inserted_protein.add(mol_name)
+            else:
+                # Duplicate moleculetype block for the same type — do NOT
+                # insert another include; GROMACS applies posre per molecule
+                # type, not per block.
+                logger.debug(
+                    f"Skipping duplicate [ moleculetype ] block for {mol_name}"
+                )
+ 
+        # ── Ligand ────────────────────────────────────────────────────────
+        if handle_ligand and not inserted_ligand and mol_name == ligand_name:
+            posre_block = _make_posre_block(f"posre_{ligand_name}.itp")
             if posre_block not in seg:
                 seg = seg.rstrip() + "\n\n" + posre_block
-                inserted_blocks.append(system_name)
-
-        # Check for ligand_name
-        if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
-            if not inserted_ligand:
-                if re.search(r"^\s*" + re.escape(ligand_name) + r"\b\s+\d+", seg, flags=re.M):
-                    include_lig = f'#include "posre_{ligand_name}.itp"'
-                    if include_lig not in seg:
-                        seg = seg.rstrip() + "\n\n" + ligand_posre_block
-                    inserted_ligand = True
-
+                report.append(ligand_name)
+            inserted_ligand = True
+ 
         segments.append(seg)
-
-    # Reassemble modified part + untouched rest
-    modified_text = preamble + "".join(segments) + text[end_of_moleculetype:]
-
-    # Write result
+ 
+    # ── 4. Reassemble and write ───────────────────────────────────────────────
+    modified_text = preamble + "".join(segments) + text[end_of_moltypes:]
     input_path.write_text(modified_text, encoding="utf-8")
-
-    logger.info(f"Added position restraints for: {', '.join(inserted_blocks) or 'none'}")
-    ## Position restraints added in topol.top
+ 
+    logger.info(
+        f"Position restraint includes added for: {', '.join(report) or 'none'}"
+    )
+    if handle_ligand and not inserted_ligand:
+        logger.warning(
+            f"Ligand '{ligand_name}' was specified but no matching "
+            f"[ moleculetype ] block was found — posre include NOT inserted."
+        )
 
     # -------------- Create em.mdp, nvt.mdp, npt.mdp files --------------
 
@@ -256,7 +303,7 @@ gen_vel                 = no        ; velocity generation off after NVT
     script = constants.SCRIPTS_DIR / "equil_Gromacs.sh"
     log_file_path = Path(f"{sandbox_dir}/gromacs_equil.log")
 
-    cmd = [str(script), sandbox_dir, input_gro, str(num_systems), log_file_path]
+    cmd = [str(script), sandbox_dir, input_gro, log_file_path]
 
     if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         obabel_cmd = f"obabel {ligand_file} -O {sandbox_dir}/{ligand_name}.gro"
@@ -422,28 +469,25 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
 
         ligand_pdb_file = f"{sandbox_dir}/{ligand_name}_check.pdb"
         with open(ligand_pdb_file, "w") as outfile:
-            first_key = next(iter(ligands)) 
+            first_key = next(iter(ligands))
             outfile.writelines(ligands[first_key])
-        chain, resnum = first_key
-        logger.info(f"Extracted first occurence of ligand {ligand_name} residue {resnum} to {ligand_pdb_file} to check if the ligand was modified during setup.")
+        logger.info(f"Extracted first occurence of ligand {ligand_name} to {ligand_pdb_file} to check if the ligand was modified during setup.")
 
         with open(f"{sandbox_dir}/md.gro", "r") as infile:
             ligand_gro_file = f"{sandbox_dir}/{ligand_name}_check.gro"
             for line in infile:
-                atom_name = line[10:15].strip()
-                if line[5:8] == ligand_name and not atom_name.startswith("H"):
+                if line[5:8] == ligand_name and "H" not in line[11:15]:
                     resnum = int(line[:5])
                     ligands_gro[(resnum)].append(line)
-
-        with open(ligand_gro_file, "w") as outfile: 
-            first_key = next(iter(ligands_gro)) 
-            atom_lines = ligands_gro[first_key] 
-            outfile.write("Ligand GRO file\n") 
-            outfile.write(f"{len(atom_lines)}\n") 
-            outfile.writelines(atom_lines) 
+        with open(ligand_gro_file, "w") as outfile:
+            first_key = next(iter(ligands_gro))
+            atom_lines = ligands_gro[first_key]
+            outfile.write("Ligand GRO file\n")
+            outfile.write(f"{len(atom_lines)}\n")
+            outfile.writelines(atom_lines)
             outfile.write("0.0 0.0 0.0\n")
-
-        logger.info(f"Extracted ligand {ligand_name} residue {first_key} to {ligand_gro_file} to check if the ligand was modified during setup.")
+            outfile.write("Ligand GRO file\n")
+        logger.info(f"Extracted ligand {ligand_name} from md.gro to {ligand_gro_file} to check if the ligand was modified during setup.")
         subprocess.run(f"obabel {ligand_gro_file} -O {sandbox_dir}/{ligand_name}_gro_check.pdb", shell=True, check=False)
 
         #check if the 2 PDB are the same
@@ -460,13 +504,11 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
             if line[17:20].strip() == ligand_name:
                 atom = line[75:80].strip()
                 ligands_pdb_check[atom] += 1
-        #logger.info(f"Atom counts in PDB: {ligands_pdb_check}")
 
         for line in gro_pdb_lines:
             if line[17:20].strip() == ligand_name:
                 atom = line[75:80].strip()
                 ligands_gro_check[atom] += 1
-        #logger.info(f"Atom counts in GRO: {ligands_gro_check}")
 
         # Compare the counts of each atom type
         if ligands_pdb_check == ligands_gro_check:
