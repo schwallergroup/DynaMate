@@ -1,6 +1,6 @@
 #!/bin/bash
 if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 sandbox_dir input_gro log_file [ligand_name] [ligand_file] [ligand_gro]"
+    echo "Usage: $0 sandbox_dir input_gro log_file num_systems [ligand_name] [ligand_file] [ligand_gro]"
     exit 1
 fi
 
@@ -17,7 +17,8 @@ else
 fi
 SANDBOX_DIR="$1"
 INPUT_GRO="$2"
-LOG_FILE="$3"
+NUM_SYSTEMS="$3"
+LOG_FILE="$4"
 
 > $LOG_FILE 
 echo "Starting GROMACS Equilibration Log" >> $LOG_FILE 2>&1
