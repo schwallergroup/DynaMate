@@ -171,7 +171,7 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
             ligand_pdb_files_list = [ligand_pdb_file]
             with open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile, open(ligand_pdb_file, "w") as outfile:
                 for line in infile:
-                    if line.startswith("HETATM") and ligand_name in line:
+                    if line.startswith("HETATM") and line[17:20].strip() == ligand_name:
                         outfile.write(line)
             logger.info(f"Extracted ligand {ligand_name} to {ligand_pdb_file}")
         
@@ -330,6 +330,9 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
                 raw_element = line[76:78]  # columns 77–78
                 element = normalize_element(raw_element)
 
+                if element not in raw_name:
+                    logger.info(f'Atom name "{raw_name}" will be changed to "{element}" because atom names need to be written with this format.')
+                    
                 if element not in ELEMENTS:
                     logger.error(
                         f'Unknown element "{element}" (from raw field "{raw_element.strip()}") found at line {idx}. Atom name in file: "{raw_name}". Please check the ligand PDB: unexpected element.'
