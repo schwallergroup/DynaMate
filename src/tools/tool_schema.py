@@ -215,7 +215,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "description": (
                             "Input PDB structure file to be processed by tleap. "
                             "This file must exist in the provided sandbox_dir."
-                            f"If the PDB file was previously prepared and capped, input_pdb will be {pdb_id}_prepared_capped.pdb."
+                            f"If the PDB file was previously prepared and capped, input_pdb will be {pdb_id}_prepared_capped_his.pdb."
                         ),
                     },
                     "pdb_id": {
