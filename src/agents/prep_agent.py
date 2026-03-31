@@ -42,7 +42,6 @@ class PrepAgent(BaseAgent):
             model_supports_system_messages
         )
 
-        self.messages: List[Dict[str, Any]] = []
         self.pdb_file_path = None
         self.user_temp = None
         self.agent_plan = ""

@@ -9,6 +9,20 @@ import time
 
 logger = get_class_logger(__name__, log_to_file=False)
 
+
+def _filter_mdrun_output(output: str) -> str:
+    """Remove verbose mdrun simulation output from GROMACS log."""
+    output = re.sub(
+        r"Steepest Descents:.*?writing lowest energy coordinates\.\n?",
+        "", output, flags=re.DOTALL
+    )
+    output = re.sub(
+        r"starting mdrun 'Generic title'.*?Writing final coordinates\.\n?",
+        "", output, flags=re.DOTALL
+    )
+    return output
+
+
 def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_files=None) -> str:
     # sometimes llm passes ligands as empty strings or the string "None"
     if not ligand_name or str(ligand_name).strip().lower() == "none":
@@ -272,7 +286,7 @@ gen_vel                 = no        ; velocity generation off after NVT
 
     if log_file_path.exists():
         try:
-            gromacs_output = log_file_path.read_text(encoding="utf-8")
+            gromacs_output = _filter_mdrun_output(log_file_path.read_text(encoding="utf-8"))
         except Exception as e:
             gromacs_output = f"Could not read GROMACS log file: {e}"
 
@@ -281,7 +295,7 @@ gen_vel                 = no        ; velocity generation off after NVT
                 f"--- Full GROMACS Log ---\n"
                 f"{gromacs_output}\n"
                 f"--- Shell Script Stderr ---\n"
-                f"{result.stderr or 'None captured directly'}") 
+                f"{result.stderr or 'None captured directly'}")
     else:
         return (f"Equilibration ran successfully. Full GROMACS output:\n"
                 f"{gromacs_output}")
@@ -363,7 +377,7 @@ gen_vel                 = no        ; continuing from NPT equilibration
 
     if log_file_path.exists():
         try:
-            gromacs_output = log_file_path.read_text(encoding="utf-8")
+            gromacs_output = _filter_mdrun_output(log_file_path.read_text(encoding="utf-8"))
         except Exception as e:
             gromacs_output = f"Could not read GROMACS log file: {e}"
 
@@ -390,7 +404,7 @@ def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
 
     cmd = [str(script), input_xtc, log_file_path]
 
-    if ligand_name is not None:
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h", ""]:
         cmd.append(ligand_name)
         cmd.append(f"{sandbox_dir}/{ligand_name}.gro")
 
@@ -409,7 +423,7 @@ def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
                 f"--- Full GROMACS Log ---\n"
                 f"{gromacs_output}\n"
                 f"--- Shell Script Stderr ---\n"
-                f"{result.stderr or 'None captured directly'}") 
+                f"{result.stderr or 'None captured directly'}")
     else:
         return (f"Equilibration ran successfully. Full GROMACS output:\n"
                 f"{gromacs_output}")

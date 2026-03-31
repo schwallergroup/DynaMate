@@ -10,9 +10,9 @@ LOG_FILE="$2"
 > $LOG_FILE 
 FILENAME="${INPUT_XTC%.*}"
 
-# Optional fourth argument
-if [ "$#" -ge 2 ]; then
-    LIGNAME="$2"
+# Optional third argument: ligand name
+if [ "$#" -ge 3 ]; then
+    LIGNAME="$3"
 else
     LIGNAME=""
 fi

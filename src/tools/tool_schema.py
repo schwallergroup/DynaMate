@@ -11,6 +11,28 @@ class Tool(BaseModel):
 def create_tool_schema_prep(sandbox_dir):
     tools = [
         Tool(
+            name="grep_file",
+            description=(
+                "Search a file for lines matching a regex pattern. Returns matching lines with their line numbers. "
+                "Useful for inspecting specific parts of large files (e.g. finding HETATM lines in a PDB, checking specific residues, "
+                "finding errors in log files) without reading the entire file."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": f"Absolute path to the file to search. Must be inside the sandbox directory ({sandbox_dir}).",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "A regex pattern to match against each line of the file (e.g. '^HETATM', 'ERROR|FATAL', 'ILE A   2').",
+                    },
+                },
+                "required": ["path", "pattern"],
+            },
+        ),
+        Tool(
             name="find_input",
             description="Find the uploaded file from the user. This always searches the sandbox directory automatically.",
             parameters={
@@ -529,6 +551,28 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                     },
                 },
                 "required": ["sandbox_dir", "pdb_id", "nsteps", "nstxout_compressed", "md_temp"],
+            },
+        ),
+        Tool(
+            name="grep_file",
+            description=(
+                "Search a file for lines matching a regex pattern. Returns matching lines with their line numbers. "
+                "Useful for inspecting specific parts of large files (e.g. finding HETATM lines in a PDB, checking specific residues, "
+                "finding errors in log files) without reading the entire file."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": f"Absolute path to the file to search. Must be inside the sandbox directory ({sandbox_dir}).",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "A regex pattern to match against each line of the file (e.g. '^HETATM', 'ERROR|FATAL', 'ILE A   2').",
+                    },
+                },
+                "required": ["path", "pattern"],
             },
         ),
         Tool(

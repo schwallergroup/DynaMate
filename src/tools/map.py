@@ -4,7 +4,7 @@ from src.tools.gromacs_tools import gromacs_equil, gromacs_production, gromacs_a
 from src.tools.pdb_tools import fix_pdb_file
 from src.tools.ligand_tools import param_ligand
 from src.tools.pdb_tools import prepare_pdb_file_ligand, add_caps, rename_histidines, fetch_and_save_pdb
-from src.tools.coding_tools import read_file, edit_file, list_files, find_input
+from src.tools.coding_tools import read_file, edit_file, list_files, find_input, grep_file
 from src.tools.RAG_tools import search_papers
 from src.tools.MMPBSA import run_gmxMMPBSA
 from src import constants
@@ -19,7 +19,8 @@ def truncate_file_output(full_content: str) -> str:
 
 TOOL_MAP = {
     # Basic File Operations
-    "read_file": lambda _, i: truncate_file_output(read_file(i['path'])),
+    "read_file": lambda _, i: read_file(i['path']),
+    "grep_file": lambda _, i: grep_file(i['path'], i['pattern']),
     "list_files": lambda s, _: list_files(s.sandbox_dir),
     "find_input": lambda s, _: find_input(s.sandbox_dir),
     "edit_file": lambda _, i: edit_file(i["path"], i["old_text"], i["new_text"]),

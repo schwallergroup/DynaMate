@@ -24,7 +24,14 @@ def load_skill_object(skill_dir: Path) -> Skill | None:
         lines = content.split("\n")
         name = lines[0].lstrip("# ").strip() if lines else skill_dir.name
         description = lines[2].strip() if len(lines) > 2 else ""
-        body = "\n".join(lines[4:]).strip() if len(lines) > 4 else content
+        # Skip the "## Instructions" header (and trailing blank line) that
+        # render() adds, so it won't be duplicated on the next save().
+        body_start = 4
+        if len(lines) > body_start and lines[body_start].strip().lower() == "## instructions":
+            body_start += 1
+            if len(lines) > body_start and lines[body_start].strip() == "":
+                body_start += 1
+        body = "\n".join(lines[body_start:]).strip() if len(lines) > body_start else content
 
         # Sanitize name to meet upskill's validation requirement.
         import re

@@ -26,11 +26,11 @@ def _load_documents() -> Docs:
     _ensure_openai_key()
     docs = Docs()
 
-    pdf_files = list(constants.PAPER_DIR.glob("*.pdf"))
+    pdf_files = list(constants.PAPER_DIR.rglob("*.pdf")) if constants.PAPER_DIR.exists() else []
     total_files = len(pdf_files)
 
     if total_files == 0:
-        raise ValueError(f"No PDF files found in {constants.PAPER_DIR}. Please ensure there are relevant papers in this directory.")
+        return None
 
     pickled_docs = "my_docs.pkl"
 
@@ -61,20 +61,18 @@ def search_papers(query: dict):
     if not documents:
         documents = _load_documents()
 
+    if documents is None:
+        return (f"No PDF files found in {constants.PAPER_DIR}. "
+                "Paper search is unavailable. Continuing without literature context.")
+
     if isinstance(query, dict):
         query = query.get("query")
 
     if not isinstance(query, str):
-        raise ValueError(f"search_papers expected a string query, got: {type(query)}")
-
-    paper_directory = constants.PAPER_DIR
-    if paper_directory is None:
-        raise ValueError(
-            "'paper_dir' is None. To use this tool, the user must provide a directory with PDFs at the start."
-        )
+        return f"search_papers expected a string query, got: {type(query)}"
 
     result = documents.query(query)
     answer = result.formatted_answer
     if "I cannot answer." in answer:
-        answer += f" Check to ensure there's papers in {paper_directory}"
+        answer += f" Check to ensure there's papers in {constants.PAPER_DIR}"
     return answer

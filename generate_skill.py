@@ -7,7 +7,8 @@ from pathlib import Path
 import tyro
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
-from upskill.generate import GENERATION_PROMPT, generate_skill, parse_json_response
+from anthropic import AsyncAnthropic
+from upskill.generate import GENERATION_PROMPT, parse_json_response
 from upskill.models import Skill, SkillMetadata
 
 from src import constants, utils
@@ -19,8 +20,6 @@ from src.upskill.trace_exporter import export_run, extract_error_examples
 
 load_dotenv(dotenv_path=constants.ENV_FILE)
 
-# Module-level logger — initially stdout-only; main() re-points it to the
-# appropriate log file once the output directory is known.
 logger = utils.get_class_logger("GenerateSkill", log_to_file=False)
 
 
@@ -80,10 +79,44 @@ class Args:
 
 async def _generate_skill_async(examples: list[str]) -> Skill:
     """Generate a skill from the task description and error-recovery examples."""
-    return await generate_skill(
-        task=TASK_DESCRIPTION,
-        examples=examples or None,
+    client = AsyncAnthropic()
+
+    prompt = f"Create a skill document that teaches an AI agent how to: {TASK_DESCRIPTION}"
+
+    if examples:
+        prompt += (
+            "\n\n## Error-correction patterns from past agent runs\n"
+            "Each entry below describes a tool failure the agent encountered "
+            "and how it recovered. The generated skill MUST include these as "
+            "explicit troubleshooting guidance so the agent can avoid or "
+            "quickly recover from the same failures:\n"
+            + "\n".join(f"- {ex}" for ex in examples)
+        )
+
+    prompt += (
+        "\n\nOutput the skill as JSON (same structure, no code blocks). "
+        "Prioritize actionable error-recovery instructions over general descriptions."
+    )
+
+    response = await client.messages.create(
         model=SKILL_MODEL,
+        max_tokens=8192,
+        system=_MD_REFINEMENT_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    data = parse_json_response(response.content[0].text)
+    return Skill(
+        name=data["name"],
+        description=data["description"],
+        body=data["body"],
+        references=data.get("references", {}),
+        scripts=data.get("scripts", {}),
+        metadata=SkillMetadata(
+            generated_by=SKILL_MODEL,
+            generated_at=datetime.now(timezone.utc),
+            source_task=TASK_DESCRIPTION,
+        ),
     )
 
 
@@ -114,10 +147,12 @@ async def _refine_md_skill_async(skill: Skill, failures: list[str]) -> Skill:
     )
 
     data = parse_json_response(response.content[0].text)
+    if "body" not in data:
+        logger.warning(f"Refinement response missing 'body' key. Got keys: {list(data.keys())}")
     return Skill(
         name=data.get("name", skill.name),
         description=data.get("description", skill.description),
-        body=data["body"],
+        body=data.get("body", skill.body),
         references=data.get("references", skill.references),
         scripts=data.get("scripts", skill.scripts),
         metadata=SkillMetadata(
@@ -228,20 +263,23 @@ def _log_md_eval_result(result: MDEvalResult) -> None:
 
 
 def main(args: Args) -> None:
+    if args.eval_only and not args.skill_name:
+        logger.error("--skill-name is required when using --eval-only. "
+                      "Specify the skill directory to evaluate/refine.")
+        sys.exit(1)
     skill_name = args.skill_name or f"md-run-{utils.time_now()}"
     skill_dir = constants.SKILLS_DIR / skill_name
 
     if not args.eval_only:
-        # Log into the skill directory alongside SKILL.md
         skill_dir.mkdir(parents=True, exist_ok=True)
         _setup_logger(skill_dir / "generate.log")
 
-        # Step 1: export trace (kept for reference / manual inspection)
+        # export trace (kept for reference / manual inspection)
         logger.info(f"Exporting run {args.run_index} from {constants.JSON_LOG_FILE} ...")
         trace_path = export_run(run_index=args.run_index, output_path=args.trace_output)
         logger.info(f"Trace written to: {trace_path}")
 
-        # Step 2: extract error-recovery examples and generate skill via Python API
+        # extract error-recovery examples and generate skill via Python API
         error_examples = extract_error_examples(run_index=args.run_index)
         logger.info(f"Extracted {len(error_examples)} error-recovery examples from trace.")
         if error_examples:
@@ -262,7 +300,7 @@ def main(args: Args) -> None:
         all_skills = sorted(constants.SKILLS_DIR.iterdir()) if constants.SKILLS_DIR.exists() else []
         logger.info(f"Total skills in library: {len([d for d in all_skills if (d / 'SKILL.md').exists()])}")
 
-    # Step 3 (optional): legacy upskill Q&A eval — note this tests declarative
+    # legacy upskill Q&A eval — note this tests declarative
     # knowledge, not pipeline execution. Use --compare-systems for real evaluation.
     for model in args.eval_model:
         logger.info(f"Evaluating skill on model: {model} (legacy Q&A eval)")
@@ -275,7 +313,7 @@ def main(args: Args) -> None:
         if rc != 0:
             logger.warning(f"upskill eval exited with code {rc} for model {model}.")
 
-    # Step 4 (optional): score an existing run's output files without re-running
+    # score an existing run's output files without re-running
     if args.eval_systems:
         logger.info("MD pipeline file-based evaluation")
         for entry in args.eval_systems:
@@ -286,7 +324,7 @@ def main(args: Args) -> None:
             result = evaluate_md_run(sandbox_path, system_name)
             _log_md_eval_result(result)
 
-    # Step 5 (optional): baseline vs. skilled comparison, with automatic refinement
+    # baseline vs. skilled comparison, with automatic refinement
     # if the skilled run does not complete the pipeline successfully.
     if args.compare_systems:
         logger.info("MD baseline vs skilled comparison")
@@ -320,7 +358,7 @@ def main(args: Args) -> None:
 
             _log_comparison(system_name, baseline, skilled)
 
-            # Refine skill if the pipeline did not complete successfully.
+            # refine skill if the pipeline did not complete successfully
             if not skilled.pipeline_successful:
                 failures = _md_eval_to_failures(skilled)
                 if failures:

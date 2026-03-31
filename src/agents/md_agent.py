@@ -147,8 +147,9 @@ class MDAgent(BaseAgent):
         return True
 
     def _reset_pipeline(self):
+        from src.agents.agent import _TrackedMessageList
         self.completed_steps = []
-        self.messages = []
+        self.messages = _TrackedMessageList()
         self.completed_summary = ""
 
     def _validate_and_setup(self) -> bool:

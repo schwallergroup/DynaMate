@@ -228,7 +228,7 @@ And again, happy molecular dynamics simulations! 🧬
 
 DynaMate supports an upskilling workflow that distills knowledge from successful agent runs into reusable skills, improving the performance of weaker or cheaper models on future runs.
 
-Skills are generated using [upskill](https://github.com/huggingface/upskill)'s Python API and require an `ANTHROPIC_API_KEY` in your `.env` file (separate from the `OPENROUTER_API_KEY` used for running the pipeline).
+Skills are generated via the Anthropic API with emphasis on error-correction patterns, using [upskill](https://github.com/huggingface/upskill) for skill data models and response parsing. An `ANTHROPIC_API_KEY` is required in your `.env` file (separate from the `OPENROUTER_API_KEY` used for running the pipeline).
 
 ### How it works
 
@@ -241,17 +241,19 @@ python main.py --model openrouter/openai/gpt-5-mini --pdb-id 6JJ3 --upskill
 ```bash
 python generate_skill.py
 ```
-This extracts error-recovery patterns from the trace (tool failures and how the agent resolved them) and passes them as concrete examples to upskill's `generate_skill()` API. The resulting skill is saved under `skills/` and automatically injected into both the PrepAgent and MDAgent system prompts on all future runs. Multiple skill files accumulate — the agent benefits from all of them (newest first, up to ~4000 tokens total).
+This extracts error-recovery patterns from the trace (tool failures and how the agent resolved them) and passes them to the Anthropic API as explicitly labeled error-correction examples, so the generated skill prioritizes actionable troubleshooting guidance. The resulting skill is saved under `skills/` and automatically injected into both the PrepAgent and MDAgent system prompts on all future runs. Multiple skill files accumulate — the agent benefits from all of them (newest first, up to ~4000 tokens total).
 
-3. **Evaluate skill impact** by running a baseline vs. skilled comparison on one or more test systems. Each system independently selects protein-only or protein-ligand evaluation criteria:
+3. **Evaluate skill impact** by running a baseline vs. skilled comparison on one or more test systems. Each system independently selects protein-only or protein-ligand evaluation criteria. `--skill-name` is required to specify which skill to potentially refine:
 ```bash
 python generate_skill.py --eval-only \
+  --skill-name md-run-20260317_131147 \
   --compare-systems 6JJ3_None 1FDH_None \
   --compare-model openrouter/anthropic/claude-haiku-4-5
 ```
 This runs the full pipeline twice per system (without skill, then with skill) and prints a step-by-step comparison table with completion ratios and a delta score. If the skilled run does not complete successfully, the skill is automatically refined based on the failed steps and saved. You can optionally fix the simulation parameters to keep evaluation runs consistent:
 ```bash
 python generate_skill.py --eval-only \
+  --skill-name md-run-20260317_131147 \
   --compare-systems 1J37_None \
   --compare-model openrouter/openai/gpt-4.1-mini \
   --compare-temp 300 --compare-duration 0.01
@@ -261,6 +263,7 @@ If `--compare-temp` and `--compare-duration` are omitted, PrepAgent chooses them
 4. **Score an existing run** against expected output files without re-running the agent:
 ```bash
 python generate_skill.py --eval-only \
+  --skill-name md-run-20260317_131147 \
   --eval-systems "6JJ3_None:sandbox/run_20260310_121949"
 ```
 
@@ -278,8 +281,8 @@ Each pipeline step is scored independently (0.0–1.0), with an overall score an
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--run-index` | `-1` | Which run to use from the log (0 = first, -1 = last) |
-| `--skill-name` | `md-run-<timestamp>` | Name for the generated skill directory |
-| `--eval-only` | False | Skip generation; run evaluation only |
+| `--skill-name` | `md-run-<timestamp>` | Name for the generated skill directory (required with `--eval-only`) |
+| `--eval-only` | False | Skip generation; run evaluation only (requires `--skill-name`) |
 | `--compare-systems` | `[]` | Systems for baseline vs. skilled comparison (`PDBID_LIGAND` or `PDBID_None`) |
 | `--compare-model` | default model | Model to use for comparison runs |
 | `--compare-temp` | None | Fixed temperature for comparison runs (K) |
