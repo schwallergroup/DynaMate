@@ -1,6 +1,6 @@
 #!/bin/bash
-if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 input_xtc [ligand_name]"
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 input_xtc log_file [ligand_name]"
     exit 1
 fi
 
@@ -11,8 +11,8 @@ LOG_FILE="$2"
 FILENAME="${INPUT_XTC%.*}"
 
 # Optional fourth argument
-if [ "$#" -ge 2 ]; then
-    LIGNAME="$2"
+if [ "$#" -ge 3 ]; then
+    LIGNAME="$3"
 else
     LIGNAME=""
 fi
