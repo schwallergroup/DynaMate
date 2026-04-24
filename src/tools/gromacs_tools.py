@@ -54,7 +54,7 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
     def make_posre_block(posre_file):
         return f'; Include Position restraint file\n#ifdef POSRES\n#include "{posre_file}"\n#endif\n\n'
 
-    if ligand_file is not None:
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         ligand_posre_block = (
             f'; Include Position restraint file\n#ifdef POSRES\n#include "posre_{ligand_name}.itp"\n#endif\n\n'
         )
@@ -99,7 +99,7 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
                 inserted_blocks.append(system_name)
 
         # Check for ligand_name
-        if ligand_file is not None:
+        if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
             if not inserted_ligand:
                 if re.search(r"^\s*" + re.escape(ligand_name) + r"\b\s+\d+", seg, flags=re.M):
                     include_lig = f'#include "posre_{ligand_name}.itp"'
@@ -257,7 +257,7 @@ gen_vel                 = no        ; velocity generation off after NVT
 
     cmd = [str(script), sandbox_dir, input_gro, str(num_systems), log_file_path]
 
-    if ligand_file is not None:
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         obabel_cmd = f"obabel {ligand_file} -O {sandbox_dir}/{ligand_name}.gro"
         obabel_result = subprocess.run(obabel_cmd, cwd=sandbox_dir, capture_output=True, text=True, shell=True)
         if obabel_result.returncode != 0:
@@ -354,7 +354,7 @@ gen_vel                 = no        ; continuing from NPT equilibration
 
     cmd = [str(script), input_gro, npt_cpt_file, log_file_path]
     
-    if ligand_name is not None:
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         cmd.append(ligand_name)
         cmd.append(f"{sandbox_dir}/{ligand_name}.gro")
 
@@ -388,7 +388,7 @@ def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
 
     cmd = [str(script), input_xtc, log_file_path]
 
-    if ligand_name is not None:
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         cmd.append(ligand_name)
         cmd.append(f"{sandbox_dir}/{ligand_name}.gro")
 

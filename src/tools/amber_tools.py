@@ -11,9 +11,17 @@ def run_tleap(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
     """
     Run tleap preparation using run_tleap.sh.
     """
+    cmd = f"pdb4amber -i {input_pdb} -o {pdb_id}_4amber.pdb"
+    result = subprocess.run(cmd, cwd=sandbox_dir, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        error_text = "\n".join(filter(None, [result.stderr, result.stdout]))
+        return f"pdb4amber failed with error:\n{error_text}"
+    else:
+        logger.info(f"pdb4amber ran successfully with output: {result.stdout}")
+    
     script = constants.SCRIPTS_DIR / "run_tleap.sh"
     result = subprocess.run(
-        [str(script), sandbox_dir, input_pdb, pdb_id], cwd=sandbox_dir, capture_output=True, text=True
+        [str(script), sandbox_dir, f"{pdb_id}_4amber.pdb", pdb_id], cwd=sandbox_dir, capture_output=True, text=True
     )
     if result.returncode != 0:
         # tleap often puts errors in stdout
@@ -38,6 +46,15 @@ def run_tleap_ligand(sandbox_dir: str, input_pdb: str, pdb_id: str, ligand_files
     """
     Run tleap preparation using run_tleap.sh, for a protein-ligand complex.
     """
+    
+    cmd = f"pdb4amber -i {input_pdb} -o {pdb_id}_4amber.pdb"
+    result = subprocess.run(cmd, cwd=sandbox_dir, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        error_text = "\n".join(filter(None, [result.stderr, result.stdout]))
+        return f"pdb4amber failed with error:\n{error_text}"
+    else:
+        logger.info(f"pdb4amber ran successfully with output: {result.stdout}")
+
     # make sure it's a list
     if isinstance(ligand_files, str):
         ligand_files = [ligand_files]
@@ -45,7 +62,7 @@ def run_tleap_ligand(sandbox_dir: str, input_pdb: str, pdb_id: str, ligand_files
         ligand_files = ligand_files
     # complex.pdb
     with (
-        open(f"{sandbox_dir}/{input_pdb}", "r") as pdb_infile,
+        open(f"{sandbox_dir}/{pdb_id}_4amber.pdb", "r") as pdb_infile,
         open(f"{sandbox_dir}/complex.pdb", "w") as outfile,
     ):
         for line in pdb_infile:
