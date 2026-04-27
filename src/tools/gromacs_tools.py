@@ -6,6 +6,8 @@ import sys
 from src import constants
 from src.utils import get_class_logger
 import time
+import rdkit
+from collections import defaultdict, Counter
 
 logger = get_class_logger(__name__, log_to_file=False)
 
@@ -379,7 +381,7 @@ gen_vel                 = no        ; continuing from NPT equilibration
                 f"{gromacs_output}")
 
 
-def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
+def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name=None) -> str:
     """
     Run production MD with GROMACS using prod_Gromacs.sh.
     """
@@ -402,12 +404,73 @@ def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
         except Exception as e:
             gromacs_output = f"Could not read GROMACS log file: {e}"
 
-    if result.returncode != 0:
-        return (f"Equilibration script failed with return code {result.returncode}.\n"
-                f"--- Full GROMACS Log ---\n"
-                f"{gromacs_output}\n"
-                f"--- Shell Script Stderr ---\n"
-                f"{result.stderr or 'None captured directly'}") 
+    # Check if ligand was not edited during the setup of simulations
+
+    logger.info("Checking if the ligand was modified during setup by comparing the original PDB of the ligand (from the input PDB) and final coordinates of the ligand (from md.gro). This is done to ensure that heavy atoms were not removed or added, which would modify the lignand.")
+
+    ligands = defaultdict(list)
+    ligands_gro = defaultdict(list)
+    ligands_pdb_check = Counter()
+    ligands_gro_check = Counter()
+
+    with open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile:
+        for line in infile:
+            if line.startswith("HETATM") and line[17:20].strip() == ligand_name:
+                chain = line[21].strip() or "_"
+                resnum = int(line[22:26])
+                ligands[(chain, resnum)].append(line)    
+
+    ligand_pdb_file = f"{sandbox_dir}/{ligand_name}_check.pdb"
+    with open(ligand_pdb_file, "w") as outfile:
+        for i, ((chain, resnum), atom_lines) in enumerate(ligands.items(), start=1):
+            outfile.writelines(atom_lines) if i ==1 else None
+    logger.info(f"Extracted first occurence of ligand {ligand_name} residue {resnum} to {ligand_pdb_file} to check if the ligand was modified during setup.")
+
+    with open(f"{sandbox_dir}/md.gro", "r") as infile:
+        ligand_gro_file = f"{sandbox_dir}/{ligand_name}_check.gro"
+        for line in infile:
+            if line[5:8] == ligand_name and "H" not in line:
+                resnum = int(line[:5])
+                ligands_gro[(resnum)].append(line)
+    with open(ligand_gro_file, "w") as outfile:
+        outfile.write("Ligand GRO file\n")
+        for i, (resnum, atom_lines) in enumerate(ligands_gro.items(), start=1):
+            outfile.write(f"{len(atom_lines)}\n")
+            outfile.writelines(atom_lines) if i ==1 else None
+        outfile.write("0.0 0.0 0.0\n")
+    logger.info(f"Extracted ligand {ligand_name} residue {resnum} to {ligand_gro_file} to check if the ligand was modified during setup.")
+    subprocess.run(f"obabel {ligand_gro_file} -O {sandbox_dir}/{ligand_name}_gro_check.pdb", shell=True, check=False)
+
+    #check if the 2 PDB are the same
+    with open(f"{sandbox_dir}/{ligand_name}_check.pdb", "r") as pdb_file, open(f"{sandbox_dir}/{ligand_name}_gro_check.pdb", "r") as gro_pdb_file:
+        pdb_lines = [line for line in pdb_file if line.startswith("HETATM") or line.startswith("ATOM")]
+        gro_pdb_lines = [line for line in gro_pdb_file if line.startswith("HETATM") or line.startswith("ATOM")]
+
+    if len(pdb_lines) != len(gro_pdb_lines):
+        logger.info(f"Number of atoms differ between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro): {len(pdb_lines)} vs {len(gro_pdb_lines)}")
     else:
-        return (f"Analysis plots produced successfully. Full GROMACS output:\n"
-                f"{gromacs_output}")
+        logger.info(f"Number of atoms match between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro): {len(pdb_lines)}")
+
+    for line in pdb_lines:
+        if line[17:20].strip() == ligand_name:
+            atom = line[75:80].strip()
+            ligands_pdb_check[atom] += 1
+    #logger.info(f"Atom counts in PDB: {ligands_pdb_check}")
+
+    for line in gro_pdb_lines:
+        if line[17:20].strip() == ligand_name:
+            atom = line[75:80].strip()
+            ligands_gro_check[atom] += 1
+    #logger.info(f"Atom counts in GRO: {ligands_gro_check}")
+
+    # Compare the counts of each atom type
+    if ligands_pdb_check == ligands_gro_check:
+        logger.info(f"Atom counts (except hydrogens) match between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro).")
+    else:
+        logger.info(f"Atom counts (except hydrogens) differ between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro).")
+        logger.info(f"The atoms that the original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro) have in common are: {ligands_pdb_check & ligands_gro_check}")
+        logger.info(f"The difference between the original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro) is: {ligands_pdb_check - ligands_gro_check}")
+
+
+    
+    
