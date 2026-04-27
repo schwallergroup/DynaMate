@@ -20,7 +20,12 @@ def _filter_mdrun_output(output: str) -> str:
         r"starting mdrun 'Generic title'.*?Writing final coordinates\.\n?",
         "", output, flags=re.DOTALL
     )
+    output = re.sub(r"^GROMACS reminds you:.*$\n?", "", output, flags=re.MULTILINE)
+    output = re.sub(r"^Back Off! I just backed up.*$\n?", "", output, flags=re.MULTILINE)
+    
     return output
+
+    
 
 
 def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_files=None) -> str:
@@ -55,11 +60,11 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
         logger.warning("No system entries found. No changes made.")
         sys.exit(0)
     
-    with open(f"{sandbox_dir}/topol_without_posre.top", "r") as f:
-        if re.search(r"system1\s+2", f.read()):
-            logger.info(f"Detected 2 chain(s) because of 2 identical chains named system1 in topol.top")
-        else:
-            logger.info(f"Detected {num_systems} chain(s): {', '.join(systems)}")
+    has_two_system1 = bool(re.search(r"system1\s+2", text))
+    if has_two_system1:
+        logger.info("Detected 2 chain(s) because of 2 identical chains named system1 in topol.top")
+    else:
+        logger.info(f"Detected {num_systems} chain(s): {', '.join(systems)}")
 
     # --- Create posre include block ---
     def make_posre_block(posre_file):
@@ -99,12 +104,14 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
 
         if match:
             system_name = match.group(1)
-            chain_index = re.search(r"\d+$", system_name)
-            chain_num = int(chain_index.group()) if chain_index else 1
+            if has_two_system1 and system_name == "system1":
+                posre_file = "posre.itp"
+            else:
+                chain_index = re.search(r"\d+$", system_name)
+                chain_num = int(chain_index.group()) if chain_index else 1
+                posre_file = f"posre_chain{chain_num}.itp" if num_systems > 1 else "posre.itp"
 
-            posre_file = f"posre_chain{chain_num}.itp" if num_systems > 1 else "posre.itp"
             posre_block = make_posre_block(posre_file)
-
             if posre_block not in seg:
                 seg = seg.rstrip() + "\n\n" + posre_block
                 inserted_blocks.append(system_name)

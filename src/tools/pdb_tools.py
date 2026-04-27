@@ -138,6 +138,106 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
         ligand_pdb (str): The path where we save the extracted ligand PDB file.
         ligand_pdb_h (str): The path where we save the protonated ligand PDB file.
     """
+    # Rewrite atoms names in the ligand
+    ELEMENTS = {
+        "H",
+        "He",
+        "Li",
+        "Be",
+        "B",
+        "C",
+        "N",
+        "O",
+        "F",
+        "Ne",
+        "Na",
+        "Mg",
+        "Al",
+        "Si",
+        "P",
+        "S",
+        "Cl",
+        "Ar",
+        "K",
+        "Ca",
+        "Sc",
+        "Ti",
+        "V",
+        "Cr",
+        "Mn",
+        "Fe",
+        "Co",
+        "Ni",
+        "Cu",
+        "Zn",
+        "Ga",
+        "Ge",
+        "As",
+        "Se",
+        "Br",
+        "Kr",
+        "Rb",
+        "Sr",
+        "Y",
+        "Zr",
+        "Nb",
+        "Mo",
+        "Tc",
+        "Ru",
+        "Rh",
+        "Pd",
+        "Ag",
+        "Cd",
+        "In",
+        "Sn",
+        "Sb",
+        "Te",
+        "I",
+        "Xe",
+        "Cs",
+        "Ba",
+        "La",
+        "Ce",
+        "Pr",
+        "Nd",
+        "Pm",
+        "Sm",
+        "Eu",
+        "Gd",
+        "Tb",
+        "Dy",
+        "Ho",
+        "Er",
+        "Tm",
+        "Yb",
+        "Lu",
+        "Hf",
+        "Ta",
+        "W",
+        "Re",
+        "Os",
+        "Ir",
+        "Pt",
+        "Au",
+        "Hg",
+        "Tl",
+        "Pb",
+        "Bi",
+        "Po",
+        "At",
+        "Rn",
+        "Fr",
+        "Ra",
+        # Transition metals sometimes used in PDBs
+        "U",
+        "Pu",
+    }
+    def normalize_element(e):
+        """Convert PDB element field to normalized chemical element symbol."""
+        e = e.strip().capitalize()
+        if len(e) == 2:
+            return e[0] + e[1].lower()
+        return e
     # Prepare PDB
     with (
         open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile,
@@ -216,148 +316,45 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
             with open(protonated_file, "w") as outfile:
                 outfile.writelines(new_filtered_lines)
 
-        # Rewrite atoms names in the ligand
-        ELEMENTS = {
-            "H",
-            "He",
-            "Li",
-            "Be",
-            "B",
-            "C",
-            "N",
-            "O",
-            "F",
-            "Ne",
-            "Na",
-            "Mg",
-            "Al",
-            "Si",
-            "P",
-            "S",
-            "Cl",
-            "Ar",
-            "K",
-            "Ca",
-            "Sc",
-            "Ti",
-            "V",
-            "Cr",
-            "Mn",
-            "Fe",
-            "Co",
-            "Ni",
-            "Cu",
-            "Zn",
-            "Ga",
-            "Ge",
-            "As",
-            "Se",
-            "Br",
-            "Kr",
-            "Rb",
-            "Sr",
-            "Y",
-            "Zr",
-            "Nb",
-            "Mo",
-            "Tc",
-            "Ru",
-            "Rh",
-            "Pd",
-            "Ag",
-            "Cd",
-            "In",
-            "Sn",
-            "Sb",
-            "Te",
-            "I",
-            "Xe",
-            "Cs",
-            "Ba",
-            "La",
-            "Ce",
-            "Pr",
-            "Nd",
-            "Pm",
-            "Sm",
-            "Eu",
-            "Gd",
-            "Tb",
-            "Dy",
-            "Ho",
-            "Er",
-            "Tm",
-            "Yb",
-            "Lu",
-            "Hf",
-            "Ta",
-            "W",
-            "Re",
-            "Os",
-            "Ir",
-            "Pt",
-            "Au",
-            "Hg",
-            "Tl",
-            "Pb",
-            "Bi",
-            "Po",
-            "At",
-            "Rn",
-            "Fr",
-            "Ra",
-            # Transition metals sometimes used in PDBs
-            "U",
-            "Pu",
-        }
+            with open(protonated_file, "r") as infile:
+                lines = infile.readlines()
 
-        def normalize_element(e):
-            """Convert PDB element field to normalized chemical element symbol."""
-            e = e.strip().capitalize()
-            if len(e) == 2:
-                return e[0] + e[1].lower()
-            return e
+            counters = defaultdict(int)
+            new_lines = []
 
-        with open(protonated_file, "r") as infile:
-            lines = infile.readlines()
+            for idx, line in enumerate(lines, start=1):
+                if line.startswith(("ATOM", "HETATM")):
+                    raw_name = line[12:16].strip()
+                    raw_element = line[76:78]  # columns 77–78
+                    element = normalize_element(raw_element)
 
-        counters = defaultdict(int)
-        new_lines = []
+                    if element not in ELEMENTS:
+                        logger.error(
+                            f'Unknown element "{element}" (from raw field "{raw_element.strip()}") found at line {idx}. Atom name in file: "{raw_name}". Please check the ligand PDB: unexpected element.'
+                        )
 
-        for idx, line in enumerate(lines, start=1):
-            if line.startswith(("ATOM", "HETATM")):
-                raw_name = line[12:16].strip()
-                raw_element = line[76:78]  # columns 77–78
-                element = normalize_element(raw_element)
+                        # keep the line unchanged
+                        new_lines.append(line)
+                        continue
 
-                if element not in ELEMENTS:
-                    logger.error(
-                        f'Unknown element "{element}" (from raw field "{raw_element.strip()}") found at line {idx}. Atom name in file: "{raw_name}". Please check the ligand PDB: unexpected element.'
-                    )
+                    # Known element → rename it
+                    counters[element] += 1
+                    new_name = f"{element}{counters[element]}"
 
-                    # keep the line unchanged
-                    new_lines.append(line)
-                    continue
+                    # Replace atom name in columns 13–16
+                    line = f"{line[:12]}{new_name:>4}{line[16:]}"
 
-                # Known element → rename it
-                counters[element] += 1
-                new_name = f"{element}{counters[element]}"
+                new_lines.append(line)
 
-                # Replace atom name in columns 13–16
-                line = f"{line[:12]}{new_name:>4}{line[16:]}"
+            with open(protonated_file, "w") as outfile:
+                outfile.writelines(new_lines)
 
-            new_lines.append(line)
+            logger.info("Atom renaming of ligand completed.")
 
-        with open(protonated_file, "w") as outfile:
-            outfile.writelines(new_lines)
-
-        logger.info("Atom renaming of ligand completed.")
-
-        if num_ligands == 1:
-            return f"Successfully Prepared PDB structure with a ligand and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)"
-        if num_ligands > 1:
-            return f"Successfully Prepared PDB structure with {num_ligands} ligands and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}.pdb and the {num_ligands} protonated ligand PDB files to {sandbox_dir}/{list_protonated_files}. This list of {num_ligands} protonated files: {list_protonated_files} is IMPORTANT and should be the input parameter for future functions. The extracted pdb file was saved to {sandbox_dir}/{pdb_id}_prepared.pdb Ligands were protonated at pH=7 and atom names were cleaned (renumbered)"
-
+            if num_ligands == 1:
+                return f"Successfully Prepared PDB structure with a ligand and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)"
+            if num_ligands > 1:
+                return f"Successfully Prepared PDB structure with {num_ligands} ligands and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}.pdb and the {num_ligands} protonated ligand PDB files to {sandbox_dir}/{list_protonated_files}. This list of {num_ligands} protonated files: {list_protonated_files} is IMPORTANT and should be the input parameter for future functions. The extracted pdb file was saved to {sandbox_dir}/{pdb_id}_prepared.pdb Ligands were protonated at pH=7 and atom names were cleaned (renumbered)"
 
     return f"Successfully Prepared PDB structure without a ligand and saved the extracted PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb"
 

@@ -115,10 +115,10 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
             description=(
                 "For protein-ligand complexes and protein-only comlexes. This tool will prepare the PDB files:"
                 "One pdb file containing the protein only, without solvent and ligand."
-                "If a ligand is present, the pdb file containing the ligand only, without solvent and protein."
-                f"The ligand file is named {ligand_name}.pdb and is then protonated and saved to {ligand_name}_h.pdb. You should check the protonation of the ligand in the literature to make sure it has been properly protonated at the appropriate pH."
+                "If one or more ligands are present, one pdb file will be created per ligand, without solvent and protein."
+                f"If there is one ligand, the ligand file is named {ligand_name}.pdb and is then protonated and saved to {ligand_name}_h.pdb. You should check the protonation of the ligand in the literature to make sure it has been properly protonated at the appropriate pH."
+                f"If there are multiple ligands (i ligands), the ligand files are named {ligand_name}_i.pdb and is then protonated and saved to {ligand_name}_i_h.pdb.."
                 f"The output protein PDB file is named {pdb_id}_prepared.pdb."
-                f"The output ligand PDB file is named {ligand_name}_h.pdb."
             ),
             parameters={
                 "type": "object",
@@ -251,6 +251,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
         Tool(
             name="param_ligand",
             description=(
+                "If the protein-ligand system contains more than one ligand, only the first one will be kept and parameterized. Nevertheless, the full list of ligands should be parsed as ligand_files."
                 "Parameterize a small molecule ligand using Amber's antechamber and parmchk2 utilities. "
                 "This tool generates the necessary files for including a ligand in molecular dynamics simulations. "
                 "It creates a mol2 file with assigned charges, a prepi file for the ligand, and a frcmod file containing any missing force field parameters. "

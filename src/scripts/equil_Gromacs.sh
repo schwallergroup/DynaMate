@@ -108,7 +108,43 @@ if grep -E "system1 +2" topol.top; then #special case for two identical chains n
 		echo "Adding group Protein-H_&_r_${ranges[0]} to index.ndx" >> $LOG_FILE 2>&1
 		echo -e "2 & \"r_${ranges[0]}\"\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
 	fi
-else 
+	# Build chain_seq: type name for each NME-based chain, in GRO order
+	chain_seq=()
+	in_mol=0
+	while IFS= read -r line; do
+		trimmed="${line%%[;]*}"
+		trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+		if echo "$trimmed" | grep -qiE "^\[.*molecules.*\]"; then in_mol=1; continue; fi
+		if echo "$trimmed" | grep -qE "^\["; then in_mol=0; continue; fi
+		if [ $in_mol -eq 1 ] && echo "$trimmed" | grep -qE "^system[0-9]"; then
+			mol_name=$(echo "$trimmed" | awk '{print $1}')
+			mol_count=$(echo "$trimmed" | awk '{print $2}')
+			for ((k=0; k<mol_count; k++)); do chain_seq+=("$mol_name"); done
+		fi
+	done < topol.top
+	# Create index groups for the first occurrence of each unique non-system1 type
+	declare -A seen_ndx
+	seen_ndx["system1"]=1
+	for ((k=0; k<${#chain_seq[@]}; k++)); do
+		mol_type="${chain_seq[$k]}"
+		if [ -z "${seen_ndx[$mol_type]+x}" ]; then
+			seen_ndx[$mol_type]=1
+			range="${ranges[$k]}"
+			if grep -Fq "[ r_${range} ]" index.ndx; then
+				echo "Group r_${range} already exists in index.ndx" >> $LOG_FILE 2>&1
+			else
+				echo "Adding group r_${range} to index.ndx" >> $LOG_FILE 2>&1
+				echo -e "ri ${range}\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+			fi
+			if grep -Fq "[ Protein-H_&_r_${range} ]" index.ndx; then
+				echo "Group Protein-H_&_r_${range} already exists in index.ndx" >> $LOG_FILE 2>&1
+			else
+				echo "Adding group Protein-H_&_r_${range} to index.ndx" >> $LOG_FILE 2>&1
+				echo -e "2 & \"r_${range}\"\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+			fi
+		fi
+	done
+else
 	i=1
     for range in "${ranges[@]}"; do
         if grep -Fq "[ r_$range ]" index.ndx; then
@@ -134,7 +170,39 @@ if grep -E "system1 +2" topol.top; then #special case for two identical chains n
 		echo "Generating position restraints for chain1" >> $LOG_FILE 2>&1
 		echo "$group_name" | $GMX genrestr -f em.gro -n index.ndx -o "posre.itp" -fc 1000 1000 1000 >> $LOG_FILE 2>&1
 	fi
-else 
+	# Create posre_chain{N}.itp for the first occurrence of each unique non-system1 type
+	declare -A seen_posre
+	seen_posre["system1"]=1
+	for ((k=0; k<${#chain_seq[@]}; k++)); do
+		mol_type="${chain_seq[$k]}"
+		if [ -z "${seen_posre[$mol_type]+x}" ]; then
+			seen_posre[$mol_type]=1
+			chain_num="${mol_type//[^0-9]/}"
+			range="${ranges[$k]}"
+			if [ ! -f "posre_chain${chain_num}.itp" ]; then
+				echo "Generating position restraints for ${mol_type} (range ${range})" >> $LOG_FILE 2>&1
+				group_name="Protein-H_&_r_${range}"
+				echo "$group_name" | $GMX genrestr -f em.gro -n index.ndx \
+					-o "posre_chain${chain_num}.itp" -fc 1000 1000 1000 >> $LOG_FILE 2>&1
+				awk '
+				/^\[ position_restraints \]/ { in_section=1; first_index=0; shift=0; print; next }
+				/^\[/ && !/\[ position_restraints \]/ { in_section=0 }
+				{
+					if (in_section && /^[0-9]/) {
+						if (first_index == 0) {
+							first_index = $1
+							if (first_index != 1) shift = first_index - 1
+						}
+						$1 = $1 - shift
+					}
+					print
+				}
+				' "posre_chain${chain_num}.itp" > "posre_chain${chain_num}_renum.itp" \
+					&& mv "posre_chain${chain_num}_renum.itp" "posre_chain${chain_num}.itp"
+			fi
+		fi
+	done
+else
     i=1
     for range in "${ranges[@]}"; do
         if [ ! -f posre_chain${i}.itp ]; then
@@ -151,7 +219,7 @@ else
                     if (in_section && /^[0-9]/) {
                         if (first_index == 0) {
                             first_index = $1
-                            if (first_index != 1) shift = first_index - 2
+                            if (first_index != 1) shift = first_index - 1
                         }
                         $1 = $1 - shift
                     }
