@@ -6,7 +6,6 @@ import sys
 from src import constants
 from src.utils import get_class_logger
 import time
-import rdkit
 from collections import defaultdict, Counter
 
 logger = get_class_logger(__name__, log_to_file=False)
@@ -403,19 +402,8 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
             gromacs_output = log_file_path.read_text(encoding="utf-8")
         except Exception as e:
             gromacs_output = f"Could not read GROMACS log file: {e}"
-        
-    if result.returncode != 0:
-        return (f"Equilibration script failed with return code {result.returncode}.\n"
-                f"--- Full GROMACS Log ---\n"
-                f"{gromacs_output}\n"
-                f"--- Shell Script Stderr ---\n"
-                f"{result.stderr or 'None captured directly'}") 
-    else:
-        return (f"Analysis plots produced successfully. Full GROMACS output:\n"
-                f"{gromacs_output}")
 
     # Check if ligand was not edited during the setup of simulations
-
     if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
 
         logger.info("Checking if the ligand was modified during setup by comparing the original PDB of the ligand (from the input PDB) and final coordinates of the ligand (from md.gro). This is done to ensure that heavy atoms were not removed or added, which would modify the lignand.")
@@ -434,23 +422,28 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
 
         ligand_pdb_file = f"{sandbox_dir}/{ligand_name}_check.pdb"
         with open(ligand_pdb_file, "w") as outfile:
-            for i, ((chain, resnum), atom_lines) in enumerate(ligands.items(), start=1):
-                outfile.writelines(atom_lines) if i ==1 else None
+            first_key = next(iter(ligands)) 
+            outfile.writelines(ligands[first_key])
+        chain, resnum = first_key
         logger.info(f"Extracted first occurence of ligand {ligand_name} residue {resnum} to {ligand_pdb_file} to check if the ligand was modified during setup.")
 
         with open(f"{sandbox_dir}/md.gro", "r") as infile:
             ligand_gro_file = f"{sandbox_dir}/{ligand_name}_check.gro"
             for line in infile:
-                if line[5:8] == ligand_name and "H" not in line:
+                atom_name = line[10:15].strip()
+                if line[5:8] == ligand_name and not atom_name.startswith("H"):
                     resnum = int(line[:5])
                     ligands_gro[(resnum)].append(line)
-        with open(ligand_gro_file, "w") as outfile:
-            outfile.write("Ligand GRO file\n")
-            for i, (resnum, atom_lines) in enumerate(ligands_gro.items(), start=1):
-                outfile.write(f"{len(atom_lines)}\n")
-                outfile.writelines(atom_lines) if i ==1 else None
+
+        with open(ligand_gro_file, "w") as outfile: 
+            first_key = next(iter(ligands_gro)) 
+            atom_lines = ligands_gro[first_key] 
+            outfile.write("Ligand GRO file\n") 
+            outfile.write(f"{len(atom_lines)}\n") 
+            outfile.writelines(atom_lines) 
             outfile.write("0.0 0.0 0.0\n")
-        logger.info(f"Extracted ligand {ligand_name} residue {resnum} to {ligand_gro_file} to check if the ligand was modified during setup.")
+
+        logger.info(f"Extracted ligand {ligand_name} residue {first_key} to {ligand_gro_file} to check if the ligand was modified during setup.")
         subprocess.run(f"obabel {ligand_gro_file} -O {sandbox_dir}/{ligand_name}_gro_check.pdb", shell=True, check=False)
 
         #check if the 2 PDB are the same
@@ -482,4 +475,14 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
             logger.info(f"Atom counts (except hydrogens) differ between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro).")
             logger.info(f"The atoms that the original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro) have in common are: {ligands_pdb_check & ligands_gro_check}")
             logger.info(f"The difference between the original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro) is: {ligands_pdb_check - ligands_gro_check}")
+
+    if result.returncode != 0:
+        return (f"Equilibration script failed with return code {result.returncode}.\n"
+                f"--- Full GROMACS Log ---\n"
+                f"{gromacs_output}\n"
+                f"--- Shell Script Stderr ---\n"
+                f"{result.stderr or 'None captured directly'}") 
+    else:
+        return (f"Analysis plots produced successfully. Full GROMACS output:\n"
+                f"{gromacs_output}")
 
