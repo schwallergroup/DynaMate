@@ -495,6 +495,10 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                             "Absolute path to the working directory where GROMACS will perform production MD. Outputs are written here."
                         ),
                     },
+                    "pdb_id": {
+                        "type": "string",
+                        "description": (f"The PDB ID of the structure used: {pdb_id}. "),
+                    },
                     "input_xtc": {
                         "type": "string",
                         "description": (

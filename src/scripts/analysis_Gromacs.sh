@@ -1,6 +1,6 @@
 #!/bin/bash
-if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 input_xtc [ligand_name]"
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 input_xtc log_file [ligand_name]"
     exit 1
 fi
 

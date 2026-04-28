@@ -1,6 +1,6 @@
 #!/bin/bash
 if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 sandbox_dir input_gro log_file [ligand_name] [ligand_file] [ligand_gro]"
+    echo "Usage: $0 sandbox_dir input_gro log_file num_systems [ligand_name] [ligand_file] [ligand_gro]"
     exit 1
 fi
 
@@ -17,16 +17,17 @@ else
 fi
 SANDBOX_DIR="$1"
 INPUT_GRO="$2"
-LOG_FILE="$3"
+NUM_SYSTEMS="$3"
+LOG_FILE="$4"
 
 > $LOG_FILE 
 echo "Starting GROMACS Equilibration Log" >> $LOG_FILE 2>&1
 
 # Optional fourth argument
 if [ "$#" -ge 5 ]; then
-    LIGNAME="$4"
-	LIGFILE="$5"
-	LIGGRO="$6"
+    LIGNAME="$5"
+	LIGFILE="$6"
+	LIGGRO="$7"
 else
     LIGNAME=""
 	LIGFILE=""
@@ -93,8 +94,8 @@ EOF
     fi
 
     # Step 5: add groups per chain
-if grep -E "system1 +2" topol.top; then #special case for two identical chains named system1
-	echo "You have two identical chains named system1, therefore only one position restraint file for the first chain will be created." >> $LOG_FILE 2>&1
+if [ "$NUM_SYSTEMS" -eq "1" ]; then #special case for several identical chains named system1
+	echo "You have $chains identical chains named system1, therefore only one position restraint file for the first chain will be created." >> $LOG_FILE 2>&1
 	echo "Creating group for residues ${ranges[0]}" >> $LOG_FILE 2>&1
 	if grep -Fq "[ r_${ranges[0]} ]" index.ndx; then # -F for fixed string (so can use [] without putting "^\[ r_${ranges[0]} \]", -q for quiet)
 		echo "Group r_${ranges[0]} already exists in index.ndx" >> $LOG_FILE 2>&1
@@ -164,7 +165,7 @@ else
 fi
 
     # Step 6: generate posre.itp for each chain
-if grep -E "system1 +2" topol.top; then #special case for two identical chains named system1
+if [ "$NUM_SYSTEMS" -eq "1" ]; then #special case for several identical chains named system1
 	group_name="Protein-H_&_r_${ranges[0]}"
 	if ! ls posre.itp 1> /dev/null 2>&1;then
 		echo "Generating position restraints for chain1" >> $LOG_FILE 2>&1

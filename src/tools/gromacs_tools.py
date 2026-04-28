@@ -6,6 +6,7 @@ import sys
 from src import constants
 from src.utils import get_class_logger
 import time
+from collections import defaultdict, Counter
 
 logger = get_class_logger(__name__, log_to_file=False)
 
@@ -59,18 +60,21 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
     if num_systems == 0:
         logger.warning("No system entries found. No changes made.")
         sys.exit(0)
-    
-    has_two_system1 = bool(re.search(r"system1\s+2", text))
-    if has_two_system1:
-        logger.info("Detected 2 chain(s) because of 2 identical chains named system1 in topol.top")
-    else:
-        logger.info(f"Detected {num_systems} chain(s): {', '.join(systems)}")
+            
+    identical_chains = re.findall(r"system1\s+(\d+)", text)
+
+    if identical_chains:
+        i = int(identical_chains[0])
+        if i > 1:
+            logger.info(f"Detected {i} identical chains named system1. Only one psosre file will be created for the first chain, and the same restraints will be applied to all identical chains named system1.")
+        else:
+            logger.info(f"Detected {num_systems} chain(s): {', '.join(systems)}")
 
     # --- Create posre include block ---
     def make_posre_block(posre_file):
         return f'; Include Position restraint file\n#ifdef POSRES\n#include "{posre_file}"\n#endif\n\n'
 
-    if ligand_file is not None:
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         ligand_posre_block = (
             f'; Include Position restraint file\n#ifdef POSRES\n#include "posre_{ligand_name}.itp"\n#endif\n\n'
         )
@@ -117,7 +121,7 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
                 inserted_blocks.append(system_name)
 
         # Check for ligand_name
-        if ligand_file is not None:
+        if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
             if not inserted_ligand:
                 if re.search(r"^\s*" + re.escape(ligand_name) + r"\b\s+\d+", seg, flags=re.M):
                     include_lig = f'#include "posre_{ligand_name}.itp"'
@@ -273,9 +277,9 @@ gen_vel                 = no        ; velocity generation off after NVT
     script = constants.SCRIPTS_DIR / "equil_Gromacs.sh"
     log_file_path = Path(f"{sandbox_dir}/gromacs_equil.log")
 
-    cmd = [str(script), sandbox_dir, input_gro, log_file_path]
+    cmd = [str(script), sandbox_dir, input_gro, str(num_systems), log_file_path]
 
-    if ligand_file is not None:
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         obabel_cmd = f"obabel {ligand_file} -O {sandbox_dir}/{ligand_name}.gro"
         obabel_result = subprocess.run(obabel_cmd, cwd=sandbox_dir, capture_output=True, text=True, shell=True)
         if obabel_result.returncode != 0:
@@ -374,7 +378,7 @@ gen_vel                 = no        ; continuing from NPT equilibration
 
     cmd = [str(script), input_gro, npt_cpt_file, log_file_path]
     
-    if ligand_name is not None:
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         cmd.append(ligand_name)
         cmd.append(f"{sandbox_dir}/{ligand_name}.gro")
 
@@ -395,11 +399,11 @@ gen_vel                 = no        ; continuing from NPT equilibration
                 f"--- Shell Script Stderr ---\n"
                 f"{result.stderr or 'None captured directly'}")
     else:
-        return (f"Equilibration ran successfully. Full GROMACS output:\n"
+        return (f"Production ran successfully. Full GROMACS output:\n"
                 f"{gromacs_output}")
 
 
-def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
+def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name=None) -> str:
     """
     Run production MD with GROMACS using prod_Gromacs.sh.
     """
@@ -425,6 +429,79 @@ def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
         except Exception as e:
             gromacs_output = f"Could not read GROMACS log file: {e}"
 
+    # Check if ligand was not edited during the setup of simulations
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
+
+        logger.info("Checking if the ligand was modified during setup by comparing the original PDB of the ligand (from the input PDB) and final coordinates of the ligand (from md.gro). This is done to ensure that heavy atoms were not removed or added, which would modify the lignand.")
+
+        ligands = defaultdict(list)
+        ligands_gro = defaultdict(list)
+        ligands_pdb_check = Counter()
+        ligands_gro_check = Counter()
+
+        with open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile:
+            for line in infile:
+                if line.startswith("HETATM") and line[17:20].strip() == ligand_name:
+                    chain = line[21].strip() or "_"
+                    resnum = int(line[22:26])
+                    ligands[(chain, resnum)].append(line)    
+
+        ligand_pdb_file = f"{sandbox_dir}/{ligand_name}_check.pdb"
+        with open(ligand_pdb_file, "w") as outfile:
+            first_key = next(iter(ligands)) 
+            outfile.writelines(ligands[first_key])
+        chain, resnum = first_key
+        logger.info(f"Extracted first occurence of ligand {ligand_name} residue {resnum} to {ligand_pdb_file} to check if the ligand was modified during setup.")
+
+        with open(f"{sandbox_dir}/md.gro", "r") as infile:
+            ligand_gro_file = f"{sandbox_dir}/{ligand_name}_check.gro"
+            for line in infile:
+                atom_name = line[10:15].strip()
+                if line[5:8] == ligand_name and not atom_name.startswith("H"):
+                    resnum = int(line[:5])
+                    ligands_gro[(resnum)].append(line)
+
+        with open(ligand_gro_file, "w") as outfile: 
+            first_key = next(iter(ligands_gro)) 
+            atom_lines = ligands_gro[first_key] 
+            outfile.write("Ligand GRO file\n") 
+            outfile.write(f"{len(atom_lines)}\n") 
+            outfile.writelines(atom_lines) 
+            outfile.write("0.0 0.0 0.0\n")
+
+        logger.info(f"Extracted ligand {ligand_name} residue {first_key} to {ligand_gro_file} to check if the ligand was modified during setup.")
+        subprocess.run(f"obabel {ligand_gro_file} -O {sandbox_dir}/{ligand_name}_gro_check.pdb", shell=True, check=False)
+
+        #check if the 2 PDB are the same
+        with open(f"{sandbox_dir}/{ligand_name}_check.pdb", "r") as pdb_file, open(f"{sandbox_dir}/{ligand_name}_gro_check.pdb", "r") as gro_pdb_file:
+            pdb_lines = [line for line in pdb_file if line.startswith("HETATM") or line.startswith("ATOM")]
+            gro_pdb_lines = [line for line in gro_pdb_file if line.startswith("HETATM") or line.startswith("ATOM")]
+
+        if len(pdb_lines) != len(gro_pdb_lines):
+            logger.info(f"Number of atoms differ between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro): {len(pdb_lines)} vs {len(gro_pdb_lines)}")
+        else:
+            logger.info(f"Number of atoms match between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro): {len(pdb_lines)}")
+
+        for line in pdb_lines:
+            if line[17:20].strip() == ligand_name:
+                atom = line[75:80].strip()
+                ligands_pdb_check[atom] += 1
+        #logger.info(f"Atom counts in PDB: {ligands_pdb_check}")
+
+        for line in gro_pdb_lines:
+            if line[17:20].strip() == ligand_name:
+                atom = line[75:80].strip()
+                ligands_gro_check[atom] += 1
+        #logger.info(f"Atom counts in GRO: {ligands_gro_check}")
+
+        # Compare the counts of each atom type
+        if ligands_pdb_check == ligands_gro_check:
+            logger.info(f"Atom counts (except hydrogens) match between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro).")
+        else:
+            logger.info(f"Atom counts (except hydrogens) differ between original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro).")
+            logger.info(f"The atoms that the original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro) have in common are: {ligands_pdb_check & ligands_gro_check}")
+            logger.info(f"The difference between the original PDB of the ligand (from {pdb_id}.pdb) and final coordinates of the ligand (from md.gro) is: {ligands_pdb_check - ligands_gro_check}")
+
     if result.returncode != 0:
         return (f"Equilibration script failed with return code {result.returncode}.\n"
                 f"--- Full GROMACS Log ---\n"
@@ -432,5 +509,6 @@ def gromacs_analysis(sandbox_dir: str, input_xtc: str, ligand_name=None) -> str:
                 f"--- Shell Script Stderr ---\n"
                 f"{result.stderr or 'None captured directly'}")
     else:
-        return (f"Equilibration ran successfully. Full GROMACS output:\n"
+        return (f"Analysis plots produced successfully. Full GROMACS output:\n"
                 f"{gromacs_output}")
+

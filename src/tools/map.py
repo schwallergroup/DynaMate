@@ -44,7 +44,7 @@ TOOL_MAP = {
     "gromacs_production": lambda s, i: gromacs_production(
         s.sandbox_dir, i["input_gro"], i["npt_cpt_file"], i["md_temp"], i["md_duration"], ligand_name=i.get("ligand_name")
     ),
-    "gromacs_analysis": lambda s, i: gromacs_analysis(s.sandbox_dir, i["input_xtc"], ligand_name=i.get("ligand_name")),
+    "gromacs_analysis": lambda s, i: gromacs_analysis(s.sandbox_dir, i["pdb_id"], i["input_xtc"], ligand_name=i.get("ligand_name")),
     # MMPBSA-related
     "run_gmxMMPBSA": lambda s, i: run_gmxMMPBSA(
         s.sandbox_dir, i["pdb_id"], i["nsteps"], i["nstxout_compressed"], i["md_temp"],
