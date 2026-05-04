@@ -30,15 +30,24 @@ def _setup_logger(log_file: Path) -> None:
     logger.handlers.clear()
     logger = utils.get_class_logger("GenerateSkill", log_file=log_file)
 
-# System prompt for MD-specific refinement — removes the 200-400 word limit
-# from upskill's default GENERATION_PROMPT since MD skills require more detail.
 _MD_REFINEMENT_PROMPT = (
     GENERATION_PROMPT.replace(
         "body: 200-400 word markdown guide with step-by-step instructions and 2-3 examples",
-        "body: detailed markdown guide covering the full pipeline, specific error-recovery "
-        "patterns, and actionable fixes for the reported failures — be thorough",
+        "body: 300-500 word markdown guide — focus on specific error-recovery patterns "
+        "and actionable fixes; omit generic pipeline descriptions",
     )
 )
+
+_MD_BODY_REFINEMENT_PROMPT = """\
+You improve MD simulation skill documents based on pipeline failures.
+
+Given the current skill body and a list of pipeline failures, output an improved skill body.
+
+Rules:
+- Output ONLY the improved markdown body — no preamble, no explanation, no code blocks wrapping it
+- Keep the body under 500 words; cut generic pipeline descriptions and keep only actionable error-recovery patterns
+- Preserve sections that are still correct; add or expand sections that address the failures\
+"""
 
 
 @dataclass
@@ -131,30 +140,28 @@ async def _refine_md_skill_async(skill: Skill, failures: list[str]) -> Skill:
 
     prompt = (
         f"Improve this MD simulation skill based on pipeline execution failures.\n\n"
-        f"Name: {skill.name}\n"
-        f"Description: {skill.description}\n\n"
         f"Current skill body:\n{skill.body}\n\n"
         f"Pipeline step failures (steps that did not produce expected output files):\n"
         + "\n".join(f"- {f}" for f in failures)
-        + "\n\nOutput the improved skill as JSON (same structure, no code blocks)."
     )
 
     response = await client.messages.create(
         model=SKILL_MODEL,
         max_tokens=8192,
-        system=_MD_REFINEMENT_PROMPT,
+        system=_MD_BODY_REFINEMENT_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    data = parse_json_response(response.content[0].text)
-    if "body" not in data:
-        logger.warning(f"Refinement response missing 'body' key. Got keys: {list(data.keys())}")
+    new_body = response.content[0].text.strip()
+    if not new_body:
+        logger.warning(f"Refinement returned empty response (stop_reason={response.stop_reason}); keeping existing body.")
+        new_body = skill.body
     return Skill(
-        name=data.get("name", skill.name),
-        description=data.get("description", skill.description),
-        body=data.get("body", skill.body),
-        references=data.get("references", skill.references),
-        scripts=data.get("scripts", skill.scripts),
+        name=skill.name,
+        description=skill.description,
+        body=new_body,
+        references=skill.references,
+        scripts=skill.scripts,
         metadata=SkillMetadata(
             generated_by=SKILL_MODEL,
             generated_at=datetime.now(timezone.utc),
@@ -274,12 +281,10 @@ def main(args: Args) -> None:
         skill_dir.mkdir(parents=True, exist_ok=True)
         _setup_logger(skill_dir / "generate.log")
 
-        # export trace (kept for reference / manual inspection)
         logger.info(f"Exporting run {args.run_index} from {constants.JSON_LOG_FILE} ...")
         trace_path = export_run(run_index=args.run_index, output_path=args.trace_output)
         logger.info(f"Trace written to: {trace_path}")
 
-        # extract error-recovery examples and generate skill via Python API
         error_examples = extract_error_examples(run_index=args.run_index)
         logger.info(f"Extracted {len(error_examples)} error-recovery examples from trace.")
         if error_examples:
@@ -300,8 +305,7 @@ def main(args: Args) -> None:
         all_skills = sorted(constants.SKILLS_DIR.iterdir()) if constants.SKILLS_DIR.exists() else []
         logger.info(f"Total skills in library: {len([d for d in all_skills if (d / 'SKILL.md').exists()])}")
 
-    # legacy upskill Q&A eval — note this tests declarative
-    # knowledge, not pipeline execution. Use --compare-systems for real evaluation.
+    # legacy upskill Q&A eval. Use --compare-systems for real evaluation.
     for model in args.eval_model:
         logger.info(f"Evaluating skill on model: {model} (legacy Q&A eval)")
         import subprocess

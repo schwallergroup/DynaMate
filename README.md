@@ -250,7 +250,7 @@ python generate_skill.py --eval-only \
   --compare-systems 6JJ3_None 1FDH_None \
   --compare-model openrouter/anthropic/claude-haiku-4-5
 ```
-This runs the full pipeline twice per system (without skill, then with skill) and prints a step-by-step comparison table with completion ratios and a delta score. If the skilled run does not complete successfully, the skill is automatically refined based on the failed steps and saved. You can optionally fix the simulation parameters to keep evaluation runs consistent:
+This runs the full pipeline twice per system (without skill, then with skill) and prints a thewhstep-by-step comparison table with completion ratios and a delta score. If the skilled run does not complete successfully, the skill is automatically refined based on the failed steps and saved. You can optionally fix the simulation parameters to keep evaluation runs consistent:
 ```bash
 python generate_skill.py --eval-only \
   --skill-name md-run-20260317_131147 \

@@ -247,6 +247,8 @@ class MDAgent(BaseAgent):
                     self.messages.append({"role": "assistant", "content": response.content})
                     if response.content:
                         print(f"\nAgent: {response.content}")
+                    else:
+                        print("\nAgent: I need your input to continue.")
                     user_input = input("You: ").strip()
                     self.messages.append({"role": "user", "content": user_input})
 

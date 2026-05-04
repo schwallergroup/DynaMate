@@ -237,7 +237,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "description": (
                             "Input PDB structure file to be processed by tleap. "
                             "This file must exist in the provided sandbox_dir."
-                            f"If the PDB file was previously prepared and capped, input_pdb will be {pdb_id}_prepared_capped.pdb."
+                            f"If the PDB file was previously prepared, capped and proper histidines renamed, input_pdb will be {pdb_id}_prepared_capped_his.pdb."
                         ),
                     },
                     "pdb_id": {
@@ -283,6 +283,14 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "type": "string",
                         "description": (
                             f"The three character residue name of the ligand to extract from the PDB file, in capital letters, called {ligand_name}."
+                        ),
+                    },
+                    "charge_ligand": {
+                        "type": "integer",
+                        "description": (
+                            "The net formal charge of the ligand (e.g. 0, 1, -1, 2). "
+                            "If not provided, it will be estimated from the structure via obabel. "
+                            "Provide this explicitly when the auto-detected charge causes antechamber to report an odd number of electrons."
                         ),
                     },
                 },
@@ -514,7 +522,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         ),
                     },
                 },
-                "required": ["sandbox_dir", "input_xtc"],
+                "required": ["sandbox_dir", "pdb_id", "input_xtc"] + (["ligand_name"] if ligand_name else []),
             },
         ),
         Tool(
