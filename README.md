@@ -5,12 +5,12 @@
 DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipped with a collection of tools for the full GROMACS/AMBER workflow. Quality checks throughout the pipeline trigger retries when something goes wrong, allowing the agent to correct course and save you time on debugging. The agent communicates interactively — asking clarifying questions, validating parameters, and answering follow-up questions about results. Successful runs can be distilled into reusable skills via the [upskill](https://github.com/huggingface/upskill) framework, improving the performance of cheaper models on future simulations. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
 
 ## Key features
-* :rocket: Autonomous protein-ligand MD simulations and binding affinity calculations
-* :arrows_counterclockwise: Error analysis and automatic correction with retry logic
-* :bar_chart: Binding affinity calculations with MM/PB(GB)SA method
-* :speech_balloon: Interactive agent chat — the agent asks clarifying questions and accepts follow-up queries after the pipeline completes
-* :sparkles: Upskilling — distill successful runs into reusable skills that improve cheaper/weaker models
-* :books: Literature-informed parameters via PaperQA search over your own PDFs
+* Autonomous protein-ligand MD simulations and binding affinity calculations
+* Error analysis and automatic correction with retry logic
+* Binding affinity calculations with MM/PB(GB)SA method
+* Interactive agent chat — the agent asks clarifying questions and accepts follow-up queries after the pipeline completes
+* Upskilling — distill successful runs into reusable skills that improve cheaper/weaker models
+* Literature-informed parameters via PaperQA search over your own PDFs
 
 ## Software setup
 The tools used by the agent require that you have a local installation of the following software. We provide a Docker image with all dependencies pre-installed (recommended), or you can install everything manually if you prefer
