@@ -65,7 +65,7 @@ def fix_charges(input_file, output_file=None):
             logger.info(f"Atom line {last_atom_idx + 1}: {old_charge:.6f} → {new_charge:.6f}")
             logger.info(f"Saved to: {output_file}")
 
-def param_ligand(sandbox_dir: str, ligand_files: str | list[str], ligand_name: str, charge_ligand: str | None = None) -> str:
+def param_ligand(sandbox_dir: str, ligand_files: str | list[str], ligand_name: str) -> str:
     if isinstance(ligand_files, str):
         ligand_files = [ligand_files]
     else:
@@ -78,45 +78,41 @@ def param_ligand(sandbox_dir: str, ligand_files: str | list[str], ligand_name: s
     logger.info(f"Parameterizing ligand file: {ligand_file}")
     ligand_stem=Path(f"{ligand_file}").stem
 
-    if charge_ligand is None:
-        # Find charge of ligand from structure
-        charges = []
+    # Find charge of ligand from structure
+    charges = []
 
-        tmp_mol2file = f"{sandbox_dir}/{ligand_stem}.mol2"
-        # Create temporary mol2 file using obabel
-        cmd = shlex.split(f"obabel {sandbox_dir}/{ligand_file} -O {tmp_mol2file}")
-        run_1 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
-        if run_1.returncode != 0:
-            error_text = "\n".join(filter(None, [run_1.stderr, run_1.stdout]))
-            return f"Ligand parameterization failed with error: {error_text}"
+    tmp_mol2file = f"{sandbox_dir}/{ligand_stem}.mol2"
+    # Create temporary mol2 file using obabel
+    cmd = shlex.split(f"obabel {sandbox_dir}/{ligand_file} -O {tmp_mol2file}")
+    run_1 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
+    if run_1.returncode != 0:
+        error_text = "\n".join(filter(None, [run_1.stderr, run_1.stdout]))
+        return f"Ligand parameterization failed with error: {error_text}"
 
-        # Read the mol2 file to find the charge
-        in_atom_section = False
+    # Read the mol2 file to find the charge
+    in_atom_section = False
 
-        with open(tmp_mol2file, "r") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("@<TRIPOS>ATOM"):
-                    in_atom_section = True
-                    continue
-                elif line.startswith("@<TRIPOS>") and in_atom_section:
-                    break
-                elif in_atom_section and line:
-                    try:
-                        charge = float(line.split()[-1])
-                        charges.append(charge)
-                    except ValueError:
-                        pass  # skip malformed lines
-        total_charge = sum(charges)
-        charge_ligand = round(total_charge)
+    with open(tmp_mol2file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("@<TRIPOS>ATOM"):
+                in_atom_section = True
+                continue
+            elif line.startswith("@<TRIPOS>") and in_atom_section:
+                break
+            elif in_atom_section and line:
+                try:
+                    charge = float(line.split()[-1])
+                    charges.append(charge)
+                except ValueError:
+                    pass  # skip malformed lines
+    total_charge = sum(charges)
+    charge_ligand = round(total_charge)
 
-        # Clean up temporary mol2 file
-        Path(tmp_mol2file).unlink(missing_ok=True)
+    # Clean up temporary mol2 file
+    Path(tmp_mol2file).unlink(missing_ok=True)
 
-        logger.info(f"Charge of ligand {ligand_stem} determined to be {charge_ligand}")
-    else:
-        charge_ligand = int(charge_ligand)
-        logger.info(f"Using provided charge for ligand {ligand_stem}: {charge_ligand}")
+    logger.info(f"Charge of ligand {ligand_stem} determined to be {charge_ligand}")
 
     # Create mol2 file using antechamber
     cmd = shlex.split(
