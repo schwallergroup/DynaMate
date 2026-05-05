@@ -460,11 +460,7 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
 
     cmd = [str(script), input_xtc, log_file_path]
 
-<<<<<<< HEAD
-    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
-=======
     if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h", ""]:
->>>>>>> b57c53e ([update] upskill and refinement fixed)
         cmd.append(ligand_name)
         cmd.append(f"{sandbox_dir}/{ligand_name}.gro")
 
