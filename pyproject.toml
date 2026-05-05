@@ -6,5 +6,5 @@ build-backend = "setuptools.build_meta"
 name = "dynamate"
 version = "0.1.0"
 description = "Multi-agent framework for running molecular dynamics simulations"
-authors = ["Cassandra Masschelein <cassandra.masschelein@epfl.ch>, Salomé Guilbert <salome.guilbert.epfl.ch>"]
+authors = ["Cassandra Masschelein <cassandra.masschelein@epfl.ch>, Salomé Guilbert <salome.guilbert@epfl.ch>"]
 readme = "README.md"
