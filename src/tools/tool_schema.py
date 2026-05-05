@@ -256,7 +256,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                 "This tool generates the necessary files for including a ligand in molecular dynamics simulations. "
                 "It creates a mol2 file with assigned charges, a prepi file for the ligand, and a frcmod file containing any missing force field parameters. "
                 f"The input ligand file should be in PDB format, protonated ({ligand_name}_h.pdb) and located in the specified sandbox_dir ({sandbox_dir}). "
-                "If the ligand's net charge is not provided, it will be calculated from the structure. "
+                "The charge of the ligand will be automatically determined from the structure by generating a mol2 file. "
                 f"The output files ({ligand_name}.mol2, {ligand_name}.prepi, {ligand_name}.frcmod) will be saved in the same sandbox_dir ({sandbox_dir})."
             ),
             parameters={
@@ -283,14 +283,6 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "type": "string",
                         "description": (
                             f"The three character residue name of the ligand to extract from the PDB file, in capital letters, called {ligand_name}."
-                        ),
-                    },
-                    "charge_ligand": {
-                        "type": "integer",
-                        "description": (
-                            "The net formal charge of the ligand (e.g. 0, 1, -1, 2). "
-                            "If not provided, it will be estimated from the structure via obabel. "
-                            "Provide this explicitly when the auto-detected charge causes antechamber to report an odd number of electrons."
                         ),
                     },
                 },

@@ -31,7 +31,7 @@ TOOL_MAP = {
     "add_caps": lambda s, i: add_caps(s.sandbox_dir, i["input_pdb"], i["pdb_id"]),
     "rename_histidines": lambda s, i: rename_histidines(s.sandbox_dir, i["input_pdb"], i["pdb_id"]),
     # Ligand handling
-    "param_ligand": lambda s, i: param_ligand(s.sandbox_dir, i["ligand_files"] if isinstance(i["ligand_files"], list) else [i["ligand_files"]], i["ligand_name"], i.get("charge_ligand")),
+    "param_ligand": lambda s, i: param_ligand(s.sandbox_dir, i["ligand_files"] if isinstance(i["ligand_files"], list) else [i["ligand_files"]], i["ligand_name"]),
     # AMBER-related
     "run_tleap": lambda s, i: run_tleap(s.sandbox_dir, i["input_pdb"], i["pdb_id"]),
     "run_tleap_ligand": lambda s, i: run_tleap_ligand(
