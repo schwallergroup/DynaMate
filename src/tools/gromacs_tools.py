@@ -453,7 +453,7 @@ def gromacs_analysis(sandbox_dir: str,  pdb_id: str, input_xtc: str, ligand_name
     # Check if ligand was not edited during the setup of simulations
     if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
 
-        logger.info("Checking if the ligand was modified during setup by comparing the original PDB of the ligand (from the input PDB) and final coordinates of the ligand (from md.gro). This is done to ensure that heavy atoms were not removed or added, which would modify the lignand.")
+        logger.info("Checking if the ligand was modified during setup by comparing the original PDB of the ligand (from the input PDB) and final coordinates of the ligand (from md.gro). This is done to ensure that heavy atoms were not removed or added, which would modify the ligand.")
 
         ligands = defaultdict(list)
         ligands_gro = defaultdict(list)

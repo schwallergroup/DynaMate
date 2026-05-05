@@ -41,7 +41,7 @@ fi
 
 if [ -f em.gro ]; then
 	echo "'em.gro' created"
-#	echo "11 0" | $GMX energy -f em.edr -o potential.xvg >> $LOG_FILE 2>&1
+	echo "11 0" | $GMX energy -f em.edr -o potential.xvg >> $LOG_FILE 2>&1
 else
 	echo "Error: Failed to create 'em.gro'" >> $LOG_FILE 2>&1
 	exit 1
