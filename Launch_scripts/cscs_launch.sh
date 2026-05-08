@@ -2,8 +2,8 @@
 #SBATCH --account=a131
 #SBATCH --partition=debug
 #SBATCH --job-name=dynamate
-#SBATCH --output=$SCRATCH/logs/dynamate/dynamate_%j_%N.out
-#SBATCH --error=$SCRATCH/logs/dynamate/dynamate_%j_%N.err
+#SBATCH --output=slurm_logs/launch_%j_%N.out
+#SBATCH --error=slurm_logs/launch_%j_%N.err
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-task=1
@@ -11,10 +11,10 @@
 #SBATCH --environment="/capstor/store/cscs/swissai/a131/bnaida/ce-images/dynamate/md_tools_v0.1.0.toml"
 
 set -e
-mkdir -p agent_logs
+mkdir -p agent_logs slurm_logs
 
 PYTHON=/capstor/store/cscs/swissai/a131/bnaida/conda-envs/dynamate/bin/python
-cd /capstor/store/cscs/swissai/a131/$USER/projects/DynaMate
+cd /capstor/store/cscs/swissai/a131/cassandra/projects/DynaMate
 
 CSV_FILE="Launch/systems.csv"
 FAILED_SYSTEMS="Launch/failed_systems.txt"
@@ -66,7 +66,6 @@ tail -n +2 "$CSV_FILE" | tail -n +$START_ROW | head -n $DATA_PER_GPU \
         echo "[INFO] Running: Protein=$PROTEIN | Ligand=$LIG_ARG | Model=$MODEL (Repeat $RUN/3)"
         echo "[INFO] Output → $LOGFILE"
         echo "------------------------------------------------------"
-
         # Run the Python script
         if ! $PYTHON -u main.py \
             --pdb_id "$PROTEIN" \
@@ -78,14 +77,8 @@ tail -n +2 "$CSV_FILE" | tail -n +$START_ROW | head -n $DATA_PER_GPU \
         then
             echo "[WARN] DynaMate failed for $PROTEIN $LIG_ARG, run $RUN."  | tee -a "$FAILED_SYSTEMS"
         fi
-
         echo "[INFO] Finished run $RUN for $PROTEIN ($MODEL)."
-
     done
-
-    # Save progress
-    echo $((LINE_NUM + 1)) > "$CHECKPOINT"
-
 done
 
 echo "[INFO] All runs completed!"
