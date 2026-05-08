@@ -11,13 +11,14 @@
 #SBATCH --environment="/capstor/store/cscs/swissai/a131/bnaida/ce-images/dynamate/md_tools_v0.1.0.toml"
 
 set -e
-mkdir -p agent_logs slurm_logs
 
 PYTHON=/capstor/store/cscs/swissai/a131/bnaida/conda-envs/dynamate/bin/python
 cd /capstor/store/cscs/swissai/a131/cassandra/projects/DynaMate
 
-CSV_FILE="Launch/systems.csv"
-FAILED_SYSTEMS="Launch/failed_systems.txt"
+mkdir -p agent_logs slurm_logs
+
+CSV_FILE="Launch_scripts/systems.csv"
+FAILED_SYSTEMS="Launch_scripts/failed_systems.txt"
 
 if [[ ! -f "$CSV_FILE" ]]; then
     echo "[ERROR] CSV file not found: $CSV_FILE"
