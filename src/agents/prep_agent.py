@@ -141,7 +141,8 @@ class PrepAgent(BaseAgent):
                 self.messages.append({"role": "assistant", "content": response.content})
                 if response.content:
                     print(f"\nAgent: {response.content}")
-                user_input = input("You: ").strip()
+                user_input = "No input provided, please make your own decision to help the pipeline continue."
+                # user_input = input("You: ").strip()
                 if user_input:
                     self.messages.append({"role": "user", "content": user_input})
 
@@ -162,10 +163,10 @@ class PrepAgent(BaseAgent):
             lig_name = re.search(r"^[A-Z0-9]{3}$", user_input)
             if not lig_name:
                 self.logger.error(
-                    f"'{user_input}' is not a valid 3-character ligand code."
+                    f"'{user_input}' is not a valid 3-character ligand code. Continuing without a ligand."
                 )
-                self.ligand_name = input("Please enter the three character identifier for the ligand (or press Enter to skip): ").strip().upper() or None
-                continue
+                self.ligand_name = None
+                return
 
             self.ligand_name = lig_name.group()
             self.logger.info(f"User requested ligand: {self.ligand_name}")
@@ -183,7 +184,7 @@ class PrepAgent(BaseAgent):
             self.logger.error(
                 f"Ligand '{self.ligand_name}' not found in {self.pdb_file_path}."
             )
-            self.ligand_name = input("Please enter the correct three character identifier for the ligand (or press Enter to skip): ").strip().upper() or None
+            self.ligand_name = None
 
     def _find_simulation_temperature(self):
         temperature = self.md_temp

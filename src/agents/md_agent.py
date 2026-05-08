@@ -212,7 +212,7 @@ class MDAgent(BaseAgent):
                 "Execute the molecular dynamics pipeline. The required steps are:\n"
                 f"{remaining_steps_string}\n\n"
                 "Work through each step in order using the available tools. "
-                "Ask the user if you need clarification on any step."
+                "Do not ask the user anything."
             ),
         })
 
@@ -223,7 +223,8 @@ class MDAgent(BaseAgent):
 
             if iteration == MAX_ITERATIONS:
                 print(f"\n[Warning] Pipeline has reached {MAX_ITERATIONS} iterations without completing.")
-                answer = input("Would you like to quit and get a summary of what went wrong? (yes/no): ").strip().lower()
+                # answer = input("Would you like to quit and get a summary of what went wrong? (yes/no): ").strip().lower()
+                answer = "yes"
                 if answer in ("yes", "y"):
                     self.logger.info(f"User chose to quit after {iteration} iterations.")
                     return
@@ -244,7 +245,8 @@ class MDAgent(BaseAgent):
                         print(f"\nAgent: {response.content}")
                     else:
                         print("\nAgent: I need your input to continue.")
-                    user_input = input("You: ").strip()
+                    # user_input = input("You: ").strip()
+                    user_input = "No input provided, please make your own decision to help the pipeline continue."
                     self.messages.append({"role": "user", "content": user_input})
 
             except Exception as e:
@@ -276,7 +278,8 @@ class MDAgent(BaseAgent):
                     self.messages.append({"role": "assistant", "content": response.content})
                     if response.content:
                         print(f"\nAgent: {response.content}")
-                    user_input = input("You (press Enter to exit): ").strip()
+                    # user_input = input("You (press Enter to exit): ").strip()
+                    user_input = None
                     if not user_input:
                         self.logger.info("User exited post-pipeline conversation.")
                         break
