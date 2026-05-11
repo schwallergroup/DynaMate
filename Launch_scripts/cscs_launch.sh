@@ -7,8 +7,13 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-task=1
-#SBATCH --time=01:00:00
+#SBATCH --time=00:10:00
 #SBATCH --environment="/capstor/store/cscs/swissai/a131/bnaida/ce-images/dynamate/md_tools_v0.1.0.toml"
+
+# srun ./testing.sh
+
+
+# slurm_procid
 
 set -e
 
@@ -19,6 +24,8 @@ mkdir -p agent_logs slurm_logs
 
 CSV_FILE="Launch_scripts/systems.csv"
 FAILED_SYSTEMS="Launch_scripts/failed_systems.txt"
+
+echo "sees GPUs: $CUDA_VISIBLE_DEVICES"
 
 if [[ ! -f "$CSV_FILE" ]]; then
     echo "[ERROR] CSV file not found: $CSV_FILE"
@@ -42,6 +49,7 @@ tail -n +2 "$CSV_FILE" | tail -n +$START_ROW | head -n $DATA_PER_GPU \
     ((LINE_NUM++))
 
     echo "[INFO] Processing CSV line $LINE_NUM"
+    echo "Made it into the first GPU"
 
     # Trim leading/trailing spaces
     PROTEIN=$(echo "$PROTEIN" | xargs)
@@ -60,6 +68,7 @@ tail -n +2 "$CSV_FILE" | tail -n +$START_ROW | head -n $DATA_PER_GPU \
     fi
 
     for RUN in 1 2 3; do
+        echo "[INFO] Starting run $RUN for $PROTEIN ($MODEL)."
         
         LOGFILE="agent_logs/${PROTEIN}_${LIG_ARG}_${MODEL_SHORT}_run${RUN}.log"
 
@@ -67,6 +76,7 @@ tail -n +2 "$CSV_FILE" | tail -n +$START_ROW | head -n $DATA_PER_GPU \
         echo "[INFO] Running: Protein=$PROTEIN | Ligand=$LIG_ARG | Model=$MODEL (Repeat $RUN/3)"
         echo "[INFO] Output → $LOGFILE"
         echo "------------------------------------------------------"
+        echo "about to enter the main.py script!"
         # Run the Python script
         if ! $PYTHON -u main.py \
             --pdb_id "$PROTEIN" \
