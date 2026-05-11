@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 from typing import Dict, Any, List
 import json
@@ -177,15 +178,19 @@ class BaseAgent(ABC):
                 self.logger.error(error_msg)
                 return {"ok": False, "output": error_msg}
 
-        tool_output = None
-
         self._validate_tool_path(tool_input)
         func = TOOL_MAP.get(tool_name)
 
         if not func:
             raise ValueError(f"Unknown tool: {tool_name}")
 
-        tool_output = func(self, tool_input)
+        try:
+            tool_output = func(self, tool_input)
+        except Exception as e:
+            error_msg = f"Tool '{tool_name}' raised an exception: {type(e).__name__}: {e}\n{traceback.format_exc()}"
+            self.logger.error(error_msg)
+            return {"ok": False, "output": error_msg}
+
         passed = self._additional_check_for_errors_tool_output(tool_name, tool_output)
 
         return {"ok": passed, "output": tool_output}

@@ -208,7 +208,10 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
                 list_protonated_files.append(f"{ligand_name}_{index}_h.pdb")
             
             cmd = shlex.split(f"obabel {ligand_pdb_file} -O {protonated_file} -p7")
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if result.returncode != 0 or not os.path.exists(protonated_file):
+                error_detail = result.stderr.decode(errors="replace").strip() or result.stdout.decode(errors="replace").strip()
+                return f"obabel failed to protonate {ligand_pdb_file} (return code {result.returncode}): {error_detail}"
             with open(protonated_file, "r") as infile:
                 lines = infile.readlines()
                 filtered_lines = [line for line in lines if not (line.startswith("CONECT") or line.startswith("MASTER"))]
