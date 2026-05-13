@@ -205,7 +205,7 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
             else:
                 index = ligand_pdb_file.split("_")[-1].split(".")[0]  # get index from filename
                 protonated_file = f"{sandbox_dir}/{ligand_name}_{index}_h.pdb"
-                list_protonated_files.append(f"{ligand_name}_{index}_h.pdb")
+                list_protonated_files.append(f"{sandbox_dir}/{ligand_name}_{index}_h.pdb")
             
             cmd = shlex.split(f"obabel {ligand_pdb_file} -O {protonated_file} -p7")
             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
