@@ -70,7 +70,6 @@ class PrepAgent(BaseAgent):
 
     def _ask_for_system(self):
         """Have the LLM ask the user for the PDB ID and optional ligand, parse via LLM, then confirm."""
-        # Step 1: LLM asks the user
         self.messages.append({
             "role": "user",
             "content": "Ask the user what molecular system they would like to simulate (PDB ID or file upload) and whether they have a ligand to include (3-letter code).",
@@ -83,7 +82,6 @@ class PrepAgent(BaseAgent):
             user_input = input("You: ").strip()
             self.messages.append({"role": "user", "content": user_input})
 
-            # Step 2: LLM extracts PDB ID and ligand as JSON
             parse_messages = [
                 {
                     "role": "user",
@@ -108,7 +106,6 @@ class PrepAgent(BaseAgent):
             except (json.JSONDecodeError, AttributeError):
                 pdb_id, ligand = None, None
 
-            # Step 3: Confirm with user
             confirm_parts = [f"PDB ID: {pdb_id or 'not found'}"]
             confirm_parts.append(f"Ligand: {ligand}" if ligand else "Ligand: none")
             print(f"\nAgent: I understood the following — {', '.join(confirm_parts)}. Is that correct? (yes/no)")
@@ -141,8 +138,7 @@ class PrepAgent(BaseAgent):
                 self.messages.append({"role": "assistant", "content": response.content})
                 if response.content:
                     print(f"\nAgent: {response.content}")
-                user_input = "No input provided, please make your own decision to help the pipeline continue."
-                # user_input = input("You: ").strip()
+                user_input = input("You: ").strip()
                 if user_input:
                     self.messages.append({"role": "user", "content": user_input})
 
@@ -235,10 +231,7 @@ class PrepAgent(BaseAgent):
     def _generate_plan(self, temperature, duration):
         if self.ligand_name:
             steps = [
-                {
-                    "step": "prepare_pdb_file_ligand",
-                    "description": "Clean and preprocess PDB file for protein-ligand system.",
-                },
+                {"step": "prepare_pdb_file_ligand", "description": "Clean and preprocess PDB file for protein-ligand system"},
                 {"step": "add_caps", "description": "Add N- and C-terminal capping groups."},
                 {"step": "rename_histidines", "description": "Rename HIS to HIE, HIP or HID."},
                 {"step": "param_ligand", "description": "Generate ligand parameters using antechamber or acpype."},
@@ -249,10 +242,7 @@ class PrepAgent(BaseAgent):
             ]
         else:
             steps = [
-                {
-                    "step": "prepare_pdb_file_ligand",
-                    "description": "Clean and preprocess PDB file for protein-only system.",
-                },
+                {"step": "prepare_pdb_file_ligand","description": "Clean and preprocess PDB file for protein-only system."},
                 {"step": "add_caps", "description": "Add N- and C-terminal capping groups."},
                 {"step": "rename_histidines", "description": "Rename HIS to HIE, HIP or HID."},
                 {"step": "run_tleap", "description": "Build system topology and solvate complex using tleap."},

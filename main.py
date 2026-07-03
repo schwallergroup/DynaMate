@@ -20,7 +20,7 @@ def _ensure_api_key(env_var: str, prompt_name: str) -> str | None:
     key = os.environ.get(env_var)
 
     if not key:
-        print(f"--- Missing API Key: {prompt_name} ---")
+        print(f"Missing API Key: {prompt_name}")
         key = input(f"Please enter your {prompt_name} API key: ").strip()
         if key:
             os.environ[env_var] = key

@@ -223,8 +223,7 @@ class MDAgent(BaseAgent):
 
             if iteration == MAX_ITERATIONS:
                 print(f"\n[Warning] Pipeline has reached {MAX_ITERATIONS} iterations without completing.")
-                # answer = input("Would you like to quit and get a summary of what went wrong? (yes/no): ").strip().lower()
-                answer = "yes"
+                answer = input("Would you like to quit and get a summary of what went wrong? (yes/no): ").strip().lower()
                 if answer in ("yes", "y"):
                     self.logger.info(f"User chose to quit after {iteration} iterations.")
                     return
@@ -245,8 +244,7 @@ class MDAgent(BaseAgent):
                         print(f"\nAgent: {response.content}")
                     else:
                         print("\nAgent: I need your input to continue.")
-                    # user_input = input("You: ").strip()
-                    user_input = "No input provided, please make your own decision to help the pipeline continue."
+                    user_input = input("You: ").strip()
                     self.messages.append({"role": "user", "content": user_input})
 
             except Exception as e:
@@ -278,8 +276,7 @@ class MDAgent(BaseAgent):
                     self.messages.append({"role": "assistant", "content": response.content})
                     if response.content:
                         print(f"\nAgent: {response.content}")
-                    # user_input = input("You (press Enter to exit): ").strip()
-                    user_input = None
+                    user_input = input("You (press Enter to exit): ").strip()
                     if not user_input:
                         self.logger.info("User exited post-pipeline conversation.")
                         break
