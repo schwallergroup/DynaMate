@@ -15,6 +15,7 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -
     bash /tmp/miniconda.sh -b -p $CONDA_DIR && \
     rm /tmp/miniconda.sh
 ENV PATH="$CONDA_DIR/bin:$PATH"
+ENV CONDA_FETCH_THREADS=1
 
 # Accept Conda's Terms and Conditions
 
