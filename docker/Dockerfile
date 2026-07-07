@@ -1,4 +1,4 @@
-FROM md_software:latest
+FROM bohdannaida/md_software:latest
 
 RUN apt-get update && apt-get install -y \
     openbabel \
@@ -24,10 +24,16 @@ RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkg
 COPY environment.yml /tmp/environment.yml
 RUN conda env create -f /tmp/environment.yml && \
     conda clean -afy
+# Separate env for MM/PB(GB)SA binding affinity
+COPY gmx_MMPBSA/env.yml /tmp/gmxmmpbsa.yml
+RUN conda env create -f /tmp/gmxmmpbsa.yml && \
+    conda clean -afy
+ENV MMPBSA_ENV_DIR="/opt/conda/envs/gmxMMPBSA/bin/gmx_MMPBSA"
 
-ARG CONDA_ENV_NAME=dynagent
+ARG CONDA_ENV_NAME=dynamate
 ENV CONDA_DEFAULT_ENV=$CONDA_ENV_NAME
 ENV PATH="$CONDA_DIR/envs/$CONDA_ENV_NAME/bin:$PATH"
+
 
 
 # Create a new user for the agent
