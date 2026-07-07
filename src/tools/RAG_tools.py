@@ -23,14 +23,14 @@ def _ensure_openai_key() -> None:
 
 
 def _load_documents() -> Docs:
-    _ensure_openai_key()
-    docs = Docs()
-
     pdf_files = list(constants.PAPER_DIR.rglob("*.pdf")) if constants.PAPER_DIR.exists() else []
     total_files = len(pdf_files)
 
     if total_files == 0:
         return None
+
+    _ensure_openai_key()  # only needed once we actually have papers to embed
+    docs = Docs()
 
     pickled_docs = "my_docs.pkl"
 
@@ -56,7 +56,6 @@ def _load_documents() -> Docs:
 
 def search_papers(query: dict):
     global documents
-    _ensure_openai_key()
 
     if not documents:
         documents = _load_documents()
