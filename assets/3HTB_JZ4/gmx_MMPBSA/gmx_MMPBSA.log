@@ -1,0 +1,391 @@
+[INFO   ] Starting gmx_MMPBSA v1.6.3
+[DEBUG  ] WDIR          : /app/sandbox/run_20260818_180409/gmx_MMPBSA
+[DEBUG  ] AMBERHOME     : /opt/software/ambertools25
+[DEBUG  ] PYTHON EXE    : /opt/conda/envs/dynamate/bin/python
+[DEBUG  ] PYTHON VERSION: 3.9.25 (main, Nov  3 2025, 22:33:05) [GCC 11.2.0]
+[DEBUG  ] MPI           : None
+[DEBUG  ] ParmEd        : 0+unknown
+[DEBUG  ] OS PLATFORM   : Linux-6.11.0-17-generic-x86_64-with-glibc2.35
+[DEBUG  ] OS SYSTEM     : Linux
+[DEBUG  ] OS VERSION    : #17~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Mon Jan 20 22:48:29 UTC 2
+[DEBUG  ] OS PROCESSOR  : x86_64
+
+[INFO   ] Command-line
+  gmx_MMPBSA -O -i mmpbsa.in -cs /app/sandbox/run_20260818_180409/md.tpr -ct /app/sandbox/run_20260818_180409/md_noPBC.xtc -ci /app/sandbox/run_20260818_180409/index.ndx -cg 1 13 -cp /app/sandbox/run_20260818_180409/topol.top -o FINAL_RESULTS_MMPBSA.dat -eo FINAL_RESULTS_MMPBSA.csv -nogui
+
+[DEBUG  ] |Input file:
+[DEBUG  ] |--------------------------------------------------------------
+[DEBUG  ] |&general
+[DEBUG  ] |sys_name=3HTB
+[DEBUG  ] |startframe=1
+[DEBUG  ] |endframe=2
+[DEBUG  ] |interval=5
+[DEBUG  ] |temperature=300
+[DEBUG  ] |verbose=2
+[DEBUG  ] |/
+[DEBUG  ] |&pb
+[DEBUG  ] |  ipb                  = 2                                              # Dielectric model for PB
+[DEBUG  ] |  inp                  = 1                                              # Nonpolar solvation method
+[DEBUG  ] |  sander_apbs          = 0                                              # Use sander.APBS?
+[DEBUG  ] |  indi                 = 1.0                                            # Internal dielectric constant
+[DEBUG  ] |  exdi                 = 80.0                                           # External dielectric constant
+[DEBUG  ] |  emem                 = 4.0                                            # Membrane dielectric constant
+[DEBUG  ] |  smoothopt            = 1                                              # Set up dielectric values for finite-difference grid edges that are located across the solute/solvent dielectric boundary
+[DEBUG  ] |  istrng               = 0.0                                            # Ionic strength (M)
+[DEBUG  ] |  radiopt              = 1                                              # Use optimized radii?
+[DEBUG  ] |  prbrad               = 1.4                                            # Probe radius
+[DEBUG  ] |  iprob                = 2.0                                            # Mobile ion probe radius (Angstroms) for ion accessible surface used to define the Stern layer
+[DEBUG  ] |  sasopt               = 0                                              # Molecular surface in PB implict model
+[DEBUG  ] |  arcres               = 0.25                                           # The resolution (Å) to compute solvent accessible arcs
+[DEBUG  ] |  memopt               = 0                                              # Use PB optimization for membrane
+[DEBUG  ] |  poretype             = 1                                              # Use exclusion region for channel proteins
+[DEBUG  ] |  npbopt               = 0                                              # Use NonLinear PB solver?
+[DEBUG  ] |  solvopt              = 1                                              # Select iterative solver
+[DEBUG  ] |  accept               = 0.001                                          # Sets the iteration convergence criterion (relative to the initial residue)
+[DEBUG  ] |  linit                = 1000                                           # Number of SCF iterations
+[DEBUG  ] |  fillratio            = 4.0                                            # Ratio between the longest dimension of the rectangular finite-difference grid and that of the solute
+[DEBUG  ] |  scale                = 2.0                                            # 1/scale = grid spacing for the finite difference solver (default = 1/2 Å)
+[DEBUG  ] |  nbuffer              = 0.0                                            # Sets how far away (in grid units) the boundary of the finite difference grid is away from the solute surface
+[DEBUG  ] |  nfocus               = 2                                              # Electrostatic focusing calculation
+[DEBUG  ] |  fscale               = 8                                              # Set the ratio between the coarse and fine grid spacings in an electrostatic focussing calculation
+[DEBUG  ] |  npbgrid              = 1                                              # Sets how often the finite-difference grid is regenerated
+[DEBUG  ] |  bcopt                = 5                                              # Boundary condition option
+[DEBUG  ] |  eneopt               = 2                                              # Compute electrostatic energy and forces
+[DEBUG  ] |  frcopt               = 0                                              # Output for computing electrostatic forces
+[DEBUG  ] |  scalec               = 0                                              # Option to compute reaction field energy and forces
+[DEBUG  ] |  cutfd                = 5.0                                            # Cutoff for finite-difference interactions
+[DEBUG  ] |  cutnb                = 0.0                                            # Cutoff for nonbonded interations
+[DEBUG  ] |  nsnba                = 1                                              # Sets how often atom-based pairlist is generated
+[DEBUG  ] |  decompopt            = 2                                              # Option to select different decomposition schemes when INP = 2
+[DEBUG  ] |  use_rmin             = 1                                              # The option to set up van der Waals radii
+[DEBUG  ] |  sprob                = 0.557                                          # Solvent probe radius for SASA used to compute the dispersion term
+[DEBUG  ] |  vprob                = 1.3                                            # Solvent probe radius for molecular volume (the volume enclosed by SASA)
+[DEBUG  ] |  rhow_effect          = 1.129                                          # Effective water density used in the non-polar dispersion term calculation
+[DEBUG  ] |  use_sav              = 1                                              # Use molecular volume (the volume enclosed by SASA) for cavity term calculation
+[DEBUG  ] |  cavity_surften       = 0.0378                                         # Surface tension
+[DEBUG  ] |  cavity_offset        = -0.5692                                        # Offset for nonpolar solvation calc
+[DEBUG  ] |  maxsph               = 400                                            # Approximate number of dots to represent the maximum atomic solvent accessible surface
+[DEBUG  ] |  maxarcdot            = 1500                                           # Number of dots used to store arc dots per atom
+[DEBUG  ] |  npbverb              = 0                                             # Option to turn on verbose mode
+[DEBUG  ] |/
+[DEBUG  ] |--------------------------------------------------------------
+[DEBUG  ] 
+[INFO   ] Checking mmpbsa.in input file...
+[INFO   ] Checking mmpbsa.in input file...Done.
+
+[INFO   ] Checking external programs...
+[INFO   ] cpptraj found! Using /opt/software/ambertools25/bin/cpptraj
+[INFO   ] tleap found! Using /opt/software/ambertools25/bin/tleap
+[INFO   ] parmchk2 found! Using /opt/software/ambertools25/bin/parmchk2
+[INFO   ] sander found! Using /opt/software/ambertools25/bin/sander
+[INFO   ] Using GROMACS version > 5.x.x!
+[INFO   ] gmx found! Using /opt/software/gromacs/bin/gmx
+[INFO   ] Checking external programs...Done.
+
+[INFO   ] Building AMBER topologies from GROMACS files...
+[INFO   ] Get PDB files from GROMACS structures files...
+[INFO   ] Making gmx_MMPBSA index for complex...
+[DEBUG  ] Running command: echo -e "name 1 GMXMMPBSA_REC\n name 13 GMXMMPBSA_LIG\n  1 | 13\n q\n" | /opt/software/gromacs/bin/gmx make_ndx -n /app/sandbox/run_20260818_180409/index.ndx -o _GMXMMPBSA_COM_index.ndx -f /app/sandbox/run_20260818_180409/md.tpr
+[DEBUG  ]                       :-) GROMACS - gmx make_ndx, 2023 (-:
+[DEBUG  ] 
+[DEBUG  ] Executable:   /opt/software/gromacs/bin/gmx
+[DEBUG  ] Data prefix:  /opt/software/gromacs
+[DEBUG  ] Working dir:  /app/sandbox/run_20260818_180409/gmx_MMPBSA
+[DEBUG  ] Command line:
+[DEBUG  ]   gmx make_ndx -n /app/sandbox/run_20260818_180409/index.ndx -o _GMXMMPBSA_COM_index.ndx -f /app/sandbox/run_20260818_180409/md.tpr
+[DEBUG  ] 
+[DEBUG  ] 
+[DEBUG  ] Reading structure file
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] 
+[DEBUG  ] GROMACS reminds you: "Calling a system 'non-linear' is like calling all wild animals 'non-elephants'." (Stan Ulam)
+[DEBUG  ] 
+[DEBUG  ] Going to read 1 old index file(s)
+[DEBUG  ] 
+[DEBUG  ]   0 System              : 45767 atoms
+[DEBUG  ]   1 Protein             :  2623 atoms
+[DEBUG  ]   2 Protein-H           :  1305 atoms
+[DEBUG  ]   3 C-alpha             :   163 atoms
+[DEBUG  ]   4 Backbone            :   492 atoms
+[DEBUG  ]   5 MainChain           :   656 atoms
+[DEBUG  ]   6 MainChain+Cb        :   808 atoms
+[DEBUG  ]   7 MainChain+H         :   823 atoms
+[DEBUG  ]   8 SideChain           :  1800 atoms
+[DEBUG  ]   9 SideChain-H         :   649 atoms
+[DEBUG  ]  10 Prot-Masses         :  2623 atoms
+[DEBUG  ]  11 non-Protein         : 43144 atoms
+[DEBUG  ]  12 Other               :    28 atoms
+[DEBUG  ]  13 JZ4                 :    22 atoms
+[DEBUG  ]  14 Cl-                 :     6 atoms
+[DEBUG  ]  15 Water               : 43116 atoms
+[DEBUG  ]  16 SOL                 : 43116 atoms
+[DEBUG  ]  17 non-Water           :  2651 atoms
+[DEBUG  ]  18 Protein-H_&_r_1-165 :  1305 atoms
+[DEBUG  ]  19 Water_and_ions      : 43122 atoms
+[DEBUG  ]  20 Protein_JZ4         :  2645 atoms
+[DEBUG  ] 
+[DEBUG  ]  nr : group      '!': not  'name' nr name   'splitch' nr    Enter: list groups
+[DEBUG  ]  'a': atom       '&': and  'del' nr         'splitres' nr   'l': list residues
+[DEBUG  ]  't': atom type  '|': or   'keep' nr        'splitat' nr    'h': help
+[DEBUG  ]  'r': residue              'res' nr         'chain' char
+[DEBUG  ]  "name": group             'case': case sensitive           'q': save and quit
+[DEBUG  ]  'ri': residue index
+[DEBUG  ] 
+[DEBUG  ] > 
+[DEBUG  ] 
+[DEBUG  ] > 
+[DEBUG  ] 
+[DEBUG  ] > 
+[DEBUG  ] Copied index group 1 'GMXMMPBSA_REC'
+[DEBUG  ] Copied index group 13 'GMXMMPBSA_LIG'
+[DEBUG  ] Merged two groups with OR: 2623 22 -> 2645
+[DEBUG  ] 
+[DEBUG  ] > 
+[INFO   ] Normal Complex: Saving group Protein_JZ4 (1_13) in _GMXMMPBSA_COM_index.ndx file as _GMXMMPBSA_COM.pdb
+[DEBUG  ] Running command: echo -e "GMXMMPBSA_REC_GMXMMPBSA_LIG"| /opt/software/gromacs/bin/gmx trjconv -f /app/sandbox/run_20260818_180409/md_noPBC.xtc -s /app/sandbox/run_20260818_180409/md.tpr -o _GMXMMPBSA_COM.pdb -n _GMXMMPBSA_COM_index.ndx -dump 0
+[DEBUG  ]                       :-) GROMACS - gmx trjconv, 2023 (-:
+[DEBUG  ] 
+[DEBUG  ] Executable:   /opt/software/gromacs/bin/gmx
+[DEBUG  ] Data prefix:  /opt/software/gromacs
+[DEBUG  ] Working dir:  /app/sandbox/run_20260818_180409/gmx_MMPBSA
+[DEBUG  ] Command line:
+[DEBUG  ]   gmx trjconv -f /app/sandbox/run_20260818_180409/md_noPBC.xtc -s /app/sandbox/run_20260818_180409/md.tpr -o _GMXMMPBSA_COM.pdb -n _GMXMMPBSA_COM_index.ndx -dump 0
+[DEBUG  ] 
+[DEBUG  ] Will write pdb: Protein data bank file
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Group     0 (         System) has 45767 elements
+[DEBUG  ] Group     1 (  GMXMMPBSA_REC) has  2623 elements
+[DEBUG  ] Group     2 (      Protein-H) has  1305 elements
+[DEBUG  ] Group     3 (        C-alpha) has   163 elements
+[DEBUG  ] Group     4 (       Backbone) has   492 elements
+[DEBUG  ] Group     5 (      MainChain) has   656 elements
+[DEBUG  ] Group     6 (   MainChain+Cb) has   808 elements
+[DEBUG  ] Group     7 (    MainChain+H) has   823 elements
+[DEBUG  ] Group     8 (      SideChain) has  1800 elements
+[DEBUG  ] Group     9 (    SideChain-H) has   649 elements
+[DEBUG  ] Group    10 (    Prot-Masses) has  2623 elements
+[DEBUG  ] Group    11 (    non-Protein) has 43144 elements
+[DEBUG  ] Group    12 (          Other) has    28 elements
+[DEBUG  ] Group    13 (  GMXMMPBSA_LIG) has    22 elements
+[DEBUG  ] Group    14 (            Cl-) has     6 elements
+[DEBUG  ] Group    15 (          Water) has 43116 elements
+[DEBUG  ] Group    16 (            SOL) has 43116 elements
+[DEBUG  ] Group    17 (      non-Water) has  2651 elements
+[DEBUG  ] Group    18 (Protein-H_&_r_1-165) has  1305 elements
+[DEBUG  ] Group    19 ( Water_and_ions) has 43122 elements
+[DEBUG  ] Group    20 (    Protein_JZ4) has  2645 elements
+[DEBUG  ] Group    21 (GMXMMPBSA_REC_GMXMMPBSA_LIG) has  2645 elements
+[DEBUG  ] Select a group: Reading frame       0 time    0.000   
+[DEBUG  ] Precision of /app/sandbox/run_20260818_180409/md_noPBC.xtc is 0.001 (nm)
+[DEBUG  ] Reading frame       1 time   10.000   
+[DEBUG  ] Dumping frame at t= 0 ps
+[DEBUG  ] Last written: frame      0 time    0.000
+[DEBUG  ] 
+[DEBUG  ] 
+[DEBUG  ] GROMACS reminds you: "Calling a system 'non-linear' is like calling all wild animals 'non-elephants'." (Stan Ulam)
+[DEBUG  ] 
+[DEBUG  ] Note that major changes are planned in future for trjconv, to improve usability and utility.
+[DEBUG  ] Select group for output
+[DEBUG  ] Selected 21: 'GMXMMPBSA_REC_GMXMMPBSA_LIG'
+[INFO   ] No receptor structure file was defined. Using ST approach...
+[INFO   ] Using receptor structure from complex to generate AMBER topology
+[INFO   ] Normal Receptor: Saving group Protein (1) in _GMXMMPBSA_COM_index.ndx file as _GMXMMPBSA_REC.pdb
+[DEBUG  ] Running command: echo -e "1"| /opt/software/gromacs/bin/gmx trjconv -f /app/sandbox/run_20260818_180409/md_noPBC.xtc -s /app/sandbox/run_20260818_180409/md.tpr -o _GMXMMPBSA_REC.pdb -n _GMXMMPBSA_COM_index.ndx -dump 0
+[DEBUG  ]                       :-) GROMACS - gmx trjconv, 2023 (-:
+[DEBUG  ] 
+[DEBUG  ] Executable:   /opt/software/gromacs/bin/gmx
+[DEBUG  ] Data prefix:  /opt/software/gromacs
+[DEBUG  ] Working dir:  /app/sandbox/run_20260818_180409/gmx_MMPBSA
+[DEBUG  ] Command line:
+[DEBUG  ]   gmx trjconv -f /app/sandbox/run_20260818_180409/md_noPBC.xtc -s /app/sandbox/run_20260818_180409/md.tpr -o _GMXMMPBSA_REC.pdb -n _GMXMMPBSA_COM_index.ndx -dump 0
+[DEBUG  ] 
+[DEBUG  ] Will write pdb: Protein data bank file
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Group     0 (         System) has 45767 elements
+[DEBUG  ] Group     1 (  GMXMMPBSA_REC) has  2623 elements
+[DEBUG  ] Group     2 (      Protein-H) has  1305 elements
+[DEBUG  ] Group     3 (        C-alpha) has   163 elements
+[DEBUG  ] Group     4 (       Backbone) has   492 elements
+[DEBUG  ] Group     5 (      MainChain) has   656 elements
+[DEBUG  ] Group     6 (   MainChain+Cb) has   808 elements
+[DEBUG  ] Group     7 (    MainChain+H) has   823 elements
+[DEBUG  ] Group     8 (      SideChain) has  1800 elements
+[DEBUG  ] Group     9 (    SideChain-H) has   649 elements
+[DEBUG  ] Group    10 (    Prot-Masses) has  2623 elements
+[DEBUG  ] Group    11 (    non-Protein) has 43144 elements
+[DEBUG  ] Group    12 (          Other) has    28 elements
+[DEBUG  ] Group    13 (  GMXMMPBSA_LIG) has    22 elements
+[DEBUG  ] Group    14 (            Cl-) has     6 elements
+[DEBUG  ] Group    15 (          Water) has 43116 elements
+[DEBUG  ] Group    16 (            SOL) has 43116 elements
+[DEBUG  ] Group    17 (      non-Water) has  2651 elements
+[DEBUG  ] Group    18 (Protein-H_&_r_1-165) has  1305 elements
+[DEBUG  ] Group    19 ( Water_and_ions) has 43122 elements
+[DEBUG  ] Group    20 (    Protein_JZ4) has  2645 elements
+[DEBUG  ] Group    21 (GMXMMPBSA_REC_GMXMMPBSA_LIG) has  2645 elements
+[DEBUG  ] Select a group: Reading frame       0 time    0.000   
+[DEBUG  ] Precision of /app/sandbox/run_20260818_180409/md_noPBC.xtc is 0.001 (nm)
+[DEBUG  ] Reading frame       1 time   10.000   
+[DEBUG  ] Dumping frame at t= 0 ps
+[DEBUG  ] Last written: frame      0 time    0.000
+[DEBUG  ] 
+[DEBUG  ] 
+[DEBUG  ] GROMACS reminds you: "Calling a system 'non-linear' is like calling all wild animals 'non-elephants'." (Stan Ulam)
+[DEBUG  ] 
+[DEBUG  ] Note that major changes are planned in future for trjconv, to improve usability and utility.
+[DEBUG  ] Select group for output
+[DEBUG  ] Selected 1: 'GMXMMPBSA_REC'
+[INFO   ] No ligand structure file was defined. Using ST approach...
+[INFO   ] Using ligand structure from complex to generate AMBER topology
+[INFO   ] Normal Ligand: Saving group JZ4 (13) in _GMXMMPBSA_COM_index.ndx file as _GMXMMPBSA_LIG.pdb
+[DEBUG  ] Running command: echo -e "13"| /opt/software/gromacs/bin/gmx trjconv -f /app/sandbox/run_20260818_180409/md_noPBC.xtc -s /app/sandbox/run_20260818_180409/md.tpr -o _GMXMMPBSA_LIG.pdb -n _GMXMMPBSA_COM_index.ndx -dump 0
+[DEBUG  ]                       :-) GROMACS - gmx trjconv, 2023 (-:
+[DEBUG  ] 
+[DEBUG  ] Executable:   /opt/software/gromacs/bin/gmx
+[DEBUG  ] Data prefix:  /opt/software/gromacs
+[DEBUG  ] Working dir:  /app/sandbox/run_20260818_180409/gmx_MMPBSA
+[DEBUG  ] Command line:
+[DEBUG  ]   gmx trjconv -f /app/sandbox/run_20260818_180409/md_noPBC.xtc -s /app/sandbox/run_20260818_180409/md.tpr -o _GMXMMPBSA_LIG.pdb -n _GMXMMPBSA_COM_index.ndx -dump 0
+[DEBUG  ] 
+[DEBUG  ] Will write pdb: Protein data bank file
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Group     0 (         System) has 45767 elements
+[DEBUG  ] Group     1 (  GMXMMPBSA_REC) has  2623 elements
+[DEBUG  ] Group     2 (      Protein-H) has  1305 elements
+[DEBUG  ] Group     3 (        C-alpha) has   163 elements
+[DEBUG  ] Group     4 (       Backbone) has   492 elements
+[DEBUG  ] Group     5 (      MainChain) has   656 elements
+[DEBUG  ] Group     6 (   MainChain+Cb) has   808 elements
+[DEBUG  ] Group     7 (    MainChain+H) has   823 elements
+[DEBUG  ] Group     8 (      SideChain) has  1800 elements
+[DEBUG  ] Group     9 (    SideChain-H) has   649 elements
+[DEBUG  ] Group    10 (    Prot-Masses) has  2623 elements
+[DEBUG  ] Group    11 (    non-Protein) has 43144 elements
+[DEBUG  ] Group    12 (          Other) has    28 elements
+[DEBUG  ] Group    13 (  GMXMMPBSA_LIG) has    22 elements
+[DEBUG  ] Group    14 (            Cl-) has     6 elements
+[DEBUG  ] Group    15 (          Water) has 43116 elements
+[DEBUG  ] Group    16 (            SOL) has 43116 elements
+[DEBUG  ] Group    17 (      non-Water) has  2651 elements
+[DEBUG  ] Group    18 (Protein-H_&_r_1-165) has  1305 elements
+[DEBUG  ] Group    19 ( Water_and_ions) has 43122 elements
+[DEBUG  ] Group    20 (    Protein_JZ4) has  2645 elements
+[DEBUG  ] Group    21 (GMXMMPBSA_REC_GMXMMPBSA_LIG) has  2645 elements
+[DEBUG  ] Select a group: Reading frame       0 time    0.000   
+[DEBUG  ] Precision of /app/sandbox/run_20260818_180409/md_noPBC.xtc is 0.001 (nm)
+[DEBUG  ] Reading frame       1 time   10.000   
+[DEBUG  ] Dumping frame at t= 0 ps
+[DEBUG  ] Last written: frame      0 time    0.000
+[DEBUG  ] 
+[DEBUG  ] 
+[DEBUG  ] GROMACS reminds you: "Calling a system 'non-linear' is like calling all wild animals 'non-elephants'." (Stan Ulam)
+[DEBUG  ] 
+[DEBUG  ] Note that major changes are planned in future for trjconv, to improve usability and utility.
+[DEBUG  ] Select group for output
+[DEBUG  ] Selected 13: 'GMXMMPBSA_LIG'
+[INFO   ] Checking the structures consistency...
+[INFO   ] 
+[INFO   ] Using topology conversion. Setting radiopt = 0...
+[INFO   ] Building Normal Complex Amber topology...
+[INFO   ] Detected Amber/OPLS force field topology format...
+[INFO   ] Assigning PBRadii mbondi2 to Complex...
+[INFO   ] Writing Normal Complex AMBER topology...
+[INFO   ] No Receptor topology file was defined. Using ST approach...
+[INFO   ] Building AMBER Receptor topology from Complex...
+[INFO   ] Assigning PBRadii mbondi2 to Receptor...
+[INFO   ] Writing Normal Receptor AMBER topology...
+[INFO   ] No Ligand topology file was defined. Using ST approach...
+[INFO   ] Building AMBER Ligand topology from Complex...
+[INFO   ] Assigning PBRadii mbondi2 to Ligand...
+[INFO   ] Writing Normal Ligand AMBER topology...
+[INFO   ] Cleaning normal complex trajectories...
+[DEBUG  ] Running command: echo -e "GMXMMPBSA_REC_GMXMMPBSA_LIG"| /opt/software/gromacs/bin/gmx trjconv -f /app/sandbox/run_20260818_180409/md_noPBC.xtc -s /app/sandbox/run_20260818_180409/md.tpr -o COM_traj_0.xtc -n _GMXMMPBSA_COM_index.ndx
+[DEBUG  ]                       :-) GROMACS - gmx trjconv, 2023 (-:
+[DEBUG  ] 
+[DEBUG  ] Executable:   /opt/software/gromacs/bin/gmx
+[DEBUG  ] Data prefix:  /opt/software/gromacs
+[DEBUG  ] Working dir:  /app/sandbox/run_20260818_180409/gmx_MMPBSA
+[DEBUG  ] Command line:
+[DEBUG  ]   gmx trjconv -f /app/sandbox/run_20260818_180409/md_noPBC.xtc -s /app/sandbox/run_20260818_180409/md.tpr -o COM_traj_0.xtc -n _GMXMMPBSA_COM_index.ndx
+[DEBUG  ] 
+[DEBUG  ] Will write xtc: Compressed trajectory (portable xdr format): xtc
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Reading file /app/sandbox/run_20260818_180409/md.tpr, VERSION 2023 (single precision)
+[DEBUG  ] Group     0 (         System) has 45767 elements
+[DEBUG  ] Group     1 (  GMXMMPBSA_REC) has  2623 elements
+[DEBUG  ] Group     2 (      Protein-H) has  1305 elements
+[DEBUG  ] Group     3 (        C-alpha) has   163 elements
+[DEBUG  ] Group     4 (       Backbone) has   492 elements
+[DEBUG  ] Group     5 (      MainChain) has   656 elements
+[DEBUG  ] Group     6 (   MainChain+Cb) has   808 elements
+[DEBUG  ] Group     7 (    MainChain+H) has   823 elements
+[DEBUG  ] Group     8 (      SideChain) has  1800 elements
+[DEBUG  ] Group     9 (    SideChain-H) has   649 elements
+[DEBUG  ] Group    10 (    Prot-Masses) has  2623 elements
+[DEBUG  ] Group    11 (    non-Protein) has 43144 elements
+[DEBUG  ] Group    12 (          Other) has    28 elements
+[DEBUG  ] Group    13 (  GMXMMPBSA_LIG) has    22 elements
+[DEBUG  ] Group    14 (            Cl-) has     6 elements
+[DEBUG  ] Group    15 (          Water) has 43116 elements
+[DEBUG  ] Group    16 (            SOL) has 43116 elements
+[DEBUG  ] Group    17 (      non-Water) has  2651 elements
+[DEBUG  ] Group    18 (Protein-H_&_r_1-165) has  1305 elements
+[DEBUG  ] Group    19 ( Water_and_ions) has 43122 elements
+[DEBUG  ] Group    20 (    Protein_JZ4) has  2645 elements
+[DEBUG  ] Group    21 (GMXMMPBSA_REC_GMXMMPBSA_LIG) has  2645 elements
+[DEBUG  ] Select a group: Reading frame       0 time    0.000   
+[DEBUG  ] Precision of /app/sandbox/run_20260818_180409/md_noPBC.xtc is 0.001 (nm)
+[DEBUG  ] Using output precision of 0.001 (nm)
+[DEBUG  ] Reading frame       1 time   10.000    ->  frame      0 time    0.000      Last frame          1 time   10.000   
+[DEBUG  ] Last written: frame      1 time   10.000
+[DEBUG  ] 
+[DEBUG  ] 
+[DEBUG  ] GROMACS reminds you: "Home computers are being called upon to perform many new functions, including the consumption of homework formerly eaten by the dog." (Doug Larson)
+[DEBUG  ] 
+[DEBUG  ] Note that major changes are planned in future for trjconv, to improve usability and utility.
+[DEBUG  ] Select group for output
+[DEBUG  ] Selected 21: 'GMXMMPBSA_REC_GMXMMPBSA_LIG'
+[INFO   ] Building AMBER topologies from GROMACS files... Done.
+
+[INFO   ] Loading and checking parameter files for compatibility...
+[INFO   ] Preparing trajectories for simulation...
+
+[INFO   ] 1 frames were processed by cpptraj for use in calculation.
+[INFO   ] Starting calculations in 1 CPUs...
+[INFO   ] Running calculations on normal system...
+[INFO   ] Beginning PB calculations with /opt/software/ambertools25/bin/sander
+[INFO   ]   calculating complex contribution...
+[INFO   ]   calculating receptor contribution...
+[INFO   ]   calculating ligand contribution...
+[INFO   ] Parsing results to output files...
+
+[INFO   ] Timing:
+[INFO   ] Total GROMACS setup time:                   2.200 sec.
+[INFO   ] Total AMBER setup time:                     0.320 sec.
+[INFO   ] Creating trajectories with cpptraj:         0.038 sec.
+[INFO   ] Total calculation time:                    13.025 sec.
+[INFO   ] Total PB calculation time:                  6.208 sec.
+[INFO   ] Statistics calculation & output writing:    0.008 sec.
+[INFO   ] Total time taken:                          15.598 sec.
+
+[INFO   ] 
+   Finalizing gmx_MMPBSA: [ERROR  ] = 0; [WARNING] = 0
+   Check the gmx_MMPBSA.log file for more details...
+
+[INFO   ] 
+ Thank you for using gmx_MMPBSA. Please consider supporting gmx_MMPBSA by citing our publication:
+    Valdés-Tresanco, M.S., Valdés-Tresanco, M.E., Valiente, P.A. and Moreno E. 
+    gmx_MMPBSA: A New Tool to Perform End-State Free Energy Calculations with GROMACS. 
+    J Chem Theory Comput., 2021, 17 (10):6281-6291. Epub 2021 Sep 29. PMID: 34586825.
+    https://pubs.acs.org/doi/10.1021/acs.jctc.1c00645
+
+Also consider citing MMPBSA.py:
+    Miller III, B. R., McGee Jr., T. D., Swails, J. M. Homeyer, N. Gohlke, H. and Roitberg, A. E.
+    MMPBSA.py: An Efficient Program for End-State Free Energy Calculations.
+    J. Chem. Theory Comput., 2012, 8 (9) pp 3314-3321
+
+[INFO   ] Finalized...

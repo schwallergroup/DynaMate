@@ -1,0 +1,27 @@
+# This file was created Tue Aug 18 18:05:36 2026
+# Created by:
+#                       :-) GROMACS - gmx hbond, 2023 (-:
+# 
+# Executable:   /opt/software/gromacs/bin/gmx
+# Data prefix:  /opt/software/gromacs
+# Working dir:  /app/sandbox/run_20260818_180409
+# Command line:
+#   gmx hbond -s md.tpr -f md_noPBC.xtc -tu ns -num hbnum_prot_lig.xvg
+# gmx hbond is part of G R O M A C S:
+#
+# Gnomes, ROck Monsters And Chili Sauce
+#
+@    title "Hydrogen Bonds"
+@    xaxis  label "Time (ns)"
+@    yaxis  label "Number"
+@TYPE xy
+@ view 0.15, 0.15, 0.75, 0.85
+@ legend on
+@ legend box on
+@ legend loctype view
+@ legend 0.78, 0.8
+@ legend length 2
+@ s0 legend "Hydrogen bonds"
+@ s1 legend "Pairs within 0.35 nm"
+         0           1           0
+      0.01           1           0

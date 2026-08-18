@@ -1,0 +1,35 @@
+# This file was created Tue Aug 18 18:05:14 2026
+# Created by:
+#                       :-) GROMACS - gmx energy, 2023 (-:
+# 
+# Executable:   /opt/software/gromacs/bin/gmx
+# Data prefix:  /opt/software/gromacs
+# Working dir:  /app/sandbox/run_20260818_180409
+# Command line:
+#   gmx energy -f npt.edr -o density.xvg
+# gmx energy is part of G R O M A C S:
+#
+# GROwing Monsters And Cloning Shrimps
+#
+@    title "GROMACS Energies"
+@    xaxis  label "Time (ps)"
+@    yaxis  label "(kg/m^3)"
+@TYPE xy
+@ view 0.15, 0.15, 0.75, 0.85
+@ legend on
+@ legend box on
+@ legend loctype view
+@ legend 0.78, 0.8
+@ legend length 2
+@ s0 legend "Density"
+    0.000000  911.256042
+    1.000000  918.154724
+    2.000000  924.614990
+    3.000000  929.152466
+    4.000000  934.535400
+    5.000000  939.204895
+    6.000000  946.553284
+    7.000000  953.006470
+    8.000000  959.051270
+    9.000000  963.140747
+   10.000000  967.354431
