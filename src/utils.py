@@ -34,7 +34,8 @@ def get_class_logger(class_name: str, log_file: Path = None, log_to_file: bool =
 
 
 def append_jsonl(data, filename):
-    """Append one JSON record per line."""
+    path = Path(filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(filename, "a", encoding="utf-8") as f:
         f.write(json.dumps(data, ensure_ascii=False) + "\n")
 

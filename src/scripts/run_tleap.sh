@@ -13,6 +13,8 @@ PDB_ID=$3
 # Create tleap input file
 cat > leap.in << EOF
 source leaprc.protein.ff14SB
+# Load DNA parameters to support DNA residues (DA/DC/DG/DT)
+source leaprc.DNA.bsc1
 source leaprc.water.tip3p
 
 # Map PDB atom names to template atom names

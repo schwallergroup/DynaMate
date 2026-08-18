@@ -7,9 +7,6 @@ wheels/
 *.egg-info
 .ipynb_checkpoints/
 
-# Virtual environments
-.venv
-
 # API keys and secrets
 .env
 
@@ -26,7 +23,3 @@ agent_logs/
 my_papers/
 my_docs.pkl
 
-software/
-Launch/
-Plotting/
-extra_logs/

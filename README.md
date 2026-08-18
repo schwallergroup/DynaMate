@@ -23,9 +23,10 @@ cd DynaMate
 ### Docker Setup (Recommended)
 
 1. Build a docker image:
-```
+```bash
 docker build -t dynamate -f ./docker/Dockerfile .
 ```
+Building the Docker image takes approximately 2-3 minutes.
 
 2. Create an `.env` file to store sensitive data like API keys:
 
@@ -34,22 +35,21 @@ OPENROUTER_API_KEY=your_key_here        # Required: used by the MD pipeline via 
 OPENAI_API_KEY=your_key_here            # Optional: used by PaperQA for literature search
 ```
 
-3. Run the agent:
+3. Run the agent in interactive mode:
+```bash
+docker run -it --rm --env-file .env -v $(pwd)/sandbox:/app/sandbox -v $(pwd)/agent_logs:/app/agent_logs -v $(pwd)/my_papers:/app/my_papers dynamate --model <model_name> --pdb-id <pdb-id> --ligand <ligand-name (optional)> --temp <simulation temperature (K), default: chosen by the agent> --duration <simulation duration (ns), default: chosen by the agent>
 ```
-docker run --env-file .env dynamate --model <model_name> --pdb-id <pdb-id> --ligand <ligand-name (optional)> --temp <simulation temperature (K), default: chosen by the agent> --duration <simulation duration (ns), default: chosen by the agent>
+For example:
+```bash
+docker run -it --rm --env-file .env -v $(pwd)/sandbox:/app/sandbox -v $(pwd)/agent_logs:/app/agent_logs -v $(pwd)/my_papers:/app/my_papers dynamate --model openrouter/openai/gpt-5.4-mini --pdb-id 3HTB --ligand JZ4 --duration 0.01
 ```
-
-4. Interactive mode (for debugging or exploration):
-```
-docker run -it --rm --env-file .env dynamate /bin/bash
-python main.py --model <model_name> --pdb-id <pdb-id>
-```
+The expected files created by this run including binding free energy calculations can be found in `/assets/3HTB_JZ4`. The entire pipeline takes around 2 minutes on an NVIDIA RTX A6000 (48GB VRAM).
 
 Happy molecular dynamics simulations!
 
 ### Manual Setup
 
-We recommend that you install in a separate `~/softwares` directory, **not inside the project**:
+We recommend that you use the provided Docker image, however, if you prefer to use your own system we recommend that you install dependencies in a separate `~/softwares` directory, **not inside the project**:
 
 ```bash
 mkdir ~/softwares
@@ -179,15 +179,19 @@ conda activate dynamate
 ```
 
 #### 9. Run the setup script
-After setting up your project environment, make sure to run the setup script to load your environment and gromacs.
+After setting up your project environment, make sure to source the setup script to load your environment and gromacs.
 ```bash
 source setup.sh
 ```
 Now you are ready to use DynaMate!
 ## Usage
-To launch the script specify the model name in the command line arguments. For example, to launch the agent with GPT-5 mini:
+To launch the script specify the model name in the command line arguments. For example, to launch the agent with GPT-5.4 mini:
 ```bash
-python main.py --model openrouter/openai/gpt-5-mini
+python main.py --model openrouter/openai/gpt-5.4-mini
+```
+or using docker
+```bash
+docker run -it --rm --env-file .env -v $(pwd)/sandbox:/app/sandbox -v $(pwd)/agent_logs:/app/agent_logs -v $(pwd)/my_papers:/app/my_papers dynamate --model openrouter/openai/gpt-5.4-mini
 ```
 You can optionally specify:
 ```

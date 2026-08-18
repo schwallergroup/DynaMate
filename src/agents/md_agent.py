@@ -212,7 +212,6 @@ class MDAgent(BaseAgent):
                 "Execute the molecular dynamics pipeline. The required steps are:\n"
                 f"{remaining_steps_string}\n\n"
                 "Work through each step in order using the available tools. "
-                "Ask the user if you need clarification on any step."
             ),
         })
 

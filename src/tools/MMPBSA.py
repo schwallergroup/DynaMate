@@ -73,9 +73,10 @@ verbose=2
     xtc_file=f"{sandbox_dir}/md_noPBC.xtc"
     index_file=f"{sandbox_dir}/index.ndx"
     topol_file=f"{sandbox_dir}/topol.top"
+    MMPBSA_ENV_DIR=os.environ.get("MMPBSA_ENV_DIR", str(constants.MMPBSA_ENV_DIR))
 
     cmd = [
-        constants.MMPBSA_ENV_DIR,
+        MMPBSA_ENV_DIR,
         "-O",
         "-i", "mmpbsa.in",
         "-cs", tpr_file,

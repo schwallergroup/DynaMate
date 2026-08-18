@@ -1,0 +1,35 @@
+# This file was created Tue Aug 18 18:04:57 2026
+# Created by:
+#                       :-) GROMACS - gmx energy, 2023 (-:
+# 
+# Executable:   /opt/software/gromacs/bin/gmx
+# Data prefix:  /opt/software/gromacs
+# Working dir:  /app/sandbox/run_20260818_180409
+# Command line:
+#   gmx energy -f nvt.edr -o temperature.xvg
+# gmx energy is part of G R O M A C S:
+#
+# Gallium Rubidium Oxygen Manganese Argon Carbon Silicon
+#
+@    title "GROMACS Energies"
+@    xaxis  label "Time (ps)"
+@    yaxis  label "(K)"
+@TYPE xy
+@ view 0.15, 0.15, 0.75, 0.85
+@ legend on
+@ legend box on
+@ legend loctype view
+@ legend 0.78, 0.8
+@ legend length 2
+@ s0 legend "Temperature"
+    0.000000    1.248332
+    1.000000  293.243561
+    2.000000  298.963348
+    3.000000  299.415253
+    4.000000  299.337921
+    5.000000  301.156677
+    6.000000  299.080414
+    7.000000  299.857819
+    8.000000  301.327881
+    9.000000  297.617188
+   10.000000  301.954285

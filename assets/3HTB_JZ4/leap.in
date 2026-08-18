@@ -1,0 +1,21 @@
+source leaprc.protein.ff14SB
+source leaprc.gaff
+source leaprc.water.tip3p
+
+# Map PDB atom names to template atom names
+addPdbAtomMap { { "CH3"  "C" } { "HH31" "H1" } { "HH32" "H2" } { "HH33" "H3" } { "CL1" "Cl1" } { "CL2" "Cl2" } }
+
+# Load ligand parameters
+loadamberprep /app/sandbox/run_20260818_180409/JZ4_h.prepi
+loadamberparams /app/sandbox/run_20260818_180409/JZ4_h.frcmod
+
+# PDBFILE already has sandbox path
+mol = loadpdb /app/sandbox/run_20260818_180409/complex.pdb
+solvatebox mol TIP3PBOX 16
+addions mol Cl- 0 # Neutralize system
+addions mol Na+ 0 # Neutralize system
+
+saveamberparm mol /app/sandbox/run_20260818_180409/complex.prmtop /app/sandbox/run_20260818_180409/complex.inpcrd
+savepdb mol /app/sandbox/run_20260818_180409/complex_tleap.pdb
+
+quit

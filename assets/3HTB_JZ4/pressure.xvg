@@ -1,0 +1,35 @@
+# This file was created Tue Aug 18 18:05:14 2026
+# Created by:
+#                       :-) GROMACS - gmx energy, 2023 (-:
+# 
+# Executable:   /opt/software/gromacs/bin/gmx
+# Data prefix:  /opt/software/gromacs
+# Working dir:  /app/sandbox/run_20260818_180409
+# Command line:
+#   gmx energy -f npt.edr -o pressure.xvg
+# gmx energy is part of G R O M A C S:
+#
+# GROwing Monsters And Cloning Shrimps
+#
+@    title "GROMACS Energies"
+@    xaxis  label "Time (ps)"
+@    yaxis  label "(bar)"
+@TYPE xy
+@ view 0.15, 0.15, 0.75, 0.85
+@ legend on
+@ legend box on
+@ legend loctype view
+@ legend 0.78, 0.8
+@ legend length 2
+@ s0 legend "Pressure"
+    0.000000  -162.157822
+    1.000000  -409.898682
+    2.000000  -100.159607
+    3.000000  -316.393585
+    4.000000  -137.725891
+    5.000000  -309.059448
+    6.000000  -192.906082
+    7.000000  -159.764740
+    8.000000  -89.161346
+    9.000000  -130.346329
+   10.000000  -233.722229

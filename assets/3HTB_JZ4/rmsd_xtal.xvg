@@ -1,0 +1,20 @@
+# This file was created Tue Aug 18 18:05:36 2026
+# Created by:
+#                        :-) GROMACS - gmx rms, 2023 (-:
+# 
+# Executable:   /opt/software/gromacs/bin/gmx
+# Data prefix:  /opt/software/gromacs
+# Working dir:  /app/sandbox/run_20260818_180409
+# Command line:
+#   gmx rms -s em.tpr -f md_noPBC.xtc -o rmsd_xtal.xvg -tu ns
+# gmx rms is part of G R O M A C S:
+#
+# Gnomes, ROck Monsters And Chili Sauce
+#
+@    title "RMSD"
+@    xaxis  label "Time (ns)"
+@    yaxis  label "RMSD (nm)"
+@TYPE xy
+@ subtitle "Backbone after lsq fit to Backbone"
+   0.0000000    0.0315312
+   0.0100000    0.0826594

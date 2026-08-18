@@ -1,0 +1,104 @@
+                       :-) GROMACS - gmx grompp, 2023 (-:
+
+Executable:   /opt/software/gromacs/bin/gmx
+Data prefix:  /opt/software/gromacs
+Working dir:  /app/sandbox/run_20260818_180409
+Command line:
+  gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -o md.tpr
+
+Ignoring obsolete mdp entry 'title'
+Ignoring obsolete mdp entry 'ns_type'
+Generating 1-4 interactions: fudge = 0.5
+Number of degrees of freedom in T-Coupling group Protein_JZ4 is 6604.79
+Number of degrees of freedom in T-Coupling group Water_and_ions is 86247.21
+Last frame         -1 time   10.000   
+
+GROMACS reminds you: "Sacrifices must be made" (Otto Lilienthal, dying after having crashed with his glider in 1896)
+
+Setting the LD random seed to 2055208431
+
+Generated 903 of the 903 non-bonded parameter combinations
+
+Generated 903 of the 903 1-4 parameter combinations
+
+Excluding 3 bonded neighbours molecule type 'system1'
+
+turning H bonds into constraints...
+
+Excluding 3 bonded neighbours molecule type 'JZ4'
+
+turning H bonds into constraints...
+
+Excluding 3 bonded neighbours molecule type 'Cl-'
+
+turning H bonds into constraints...
+
+Excluding 3 bonded neighbours molecule type 'WAT'
+
+turning H bonds into constraints...
+
+The largest distance between excluded atoms is 0.434 nm between atom 96 and 103
+
+Determining Verlet buffer for a tolerance of 0.005 kJ/mol/ps at 300 K
+
+Calculated rlist for 1x1 atom pair-list as 1.294 nm, buffer size 0.094 nm
+
+Set rlist, assuming 4x4 atom pair-list, to 1.222 nm, buffer size 0.022 nm
+
+Note that mdrun will redetermine rlist based on the actual pair-list setup
+
+Reading Coordinates, Velocities and Box size from old trajectory
+
+Will read whole trajectory
+
+Using frame at t = 10 ps
+
+Starting time for run is 0 ps
+Calculating fourier grid dimensions for X Y Z
+Using a fourier grid of 48x48x56, spacing 0.156 0.158 0.149
+
+Estimate for the relative computational load of the PME mesh part: 0.15
+
+This run will generate roughly 4 Mb of data
+                       :-) GROMACS - gmx mdrun, 2023 (-:
+
+Executable:   /opt/software/gromacs/bin/gmx
+Data prefix:  /opt/software/gromacs
+Working dir:  /app/sandbox/run_20260818_180409
+Command line:
+  gmx mdrun -v -deffnm md
+
+Reading file md.tpr, VERSION 2023 (single precision)
+Changing nstlist from 20 to 80, rlist from 1.222 to 1.318
+
+Using 24 MPI threads
+Using 1 OpenMP thread per tMPI thread
+
+starting mdrun 'Generic title'
+5000 steps,     10.0 ps.
+step 0step 100, remaining wall clock time:    17 s          step 200, remaining wall clock time:    16 s          step 300, remaining wall clock time:    16 s          vol 0.90  imb F 12% pme/F 0.39 step 400, remaining wall clock time:    16 s          step 500, remaining wall clock time:    15 s          step 600, remaining wall clock time:    14 s          step 700, remaining wall clock time:    14 s          vol 0.76  imb F  2% pme/F 0.42 step 800, remaining wall clock time:    13 s          step 900, remaining wall clock time:    13 s          step 1000, remaining wall clock time:    13 s          step 1100, remaining wall clock time:    12 s          vol 0.75  imb F  3% pme/F 0.42 step 1200, remaining wall clock time:    12 s          step 1300, remaining wall clock time:    11 s          step 1400, remaining wall clock time:    11 s          step 1500, remaining wall clock time:    11 s          vol 0.74  imb F  2% pme/F 0.42 step 1600, remaining wall clock time:    10 s          step 1700, remaining wall clock time:    10 s          step 1800, remaining wall clock time:    10 s          step 1900, remaining wall clock time:     9 s          vol 0.76  imb F  3% pme/F 0.42 step 2000, remaining wall clock time:     9 s          step 2100, remaining wall clock time:     9 s          step 2200, remaining wall clock time:     8 s          step 2300, remaining wall clock time:     8 s          vol 0.72  imb F  3% pme/F 0.43 step 2400, remaining wall clock time:     8 s          step 2500, remaining wall clock time:     7 s          step 2600, remaining wall clock time:     7 s          step 2700, remaining wall clock time:     7 s          vol 0.73  imb F  4% pme/F 0.42 step 2800, remaining wall clock time:     6 s          step 2900, remaining wall clock time:     6 s          step 3000, remaining wall clock time:     6 s          step 3100, remaining wall clock time:     5 s          vol 0.76  imb F  3% pme/F 0.42 step 3200, remaining wall clock time:     5 s          step 3300, remaining wall clock time:     5 s          step 3400, remaining wall clock time:     5 s          step 3500, remaining wall clock time:     4 s          vol 0.75  imb F  3% pme/F 0.42 step 3600, remaining wall clock time:     4 s          step 3700, remaining wall clock time:     4 s          step 3800, remaining wall clock time:     3 s          step 3900, remaining wall clock time:     3 s          vol 0.76  imb F  4% pme/F 0.42 step 4000, remaining wall clock time:     3 s          step 4100, remaining wall clock time:     2 s          step 4200, remaining wall clock time:     2 s          step 4300, remaining wall clock time:     2 s          vol 0.75  imb F  3% pme/F 0.41 step 4400, remaining wall clock time:     1 s          step 4500, remaining wall clock time:     1 s          step 4600, remaining wall clock time:     1 s          step 4700, remaining wall clock time:     0 s          vol 0.75  imb F  3% pme/F 0.42 step 4800, remaining wall clock time:     0 s          step 4900, remaining wall clock time:     0 s          
+Writing final coordinates.
+step 5000, remaining wall clock time:     0 s          
+
+Dynamic load balancing report:
+ DLB was turned on during the run due to measured imbalance.
+ Average load imbalance: 4.3%.
+ The balanceable part of the MD step is 91%, load imbalance is computed from this.
+ Part of the total run time spent waiting due to load imbalance: 4.0%.
+ Steps where the load balancing was limited by -rdd, -rcon and/or -dds: Y 0 % Z 0 %
+ Average PME mesh/force load: 0.415
+ Part of the total run time spent waiting due to PP/PME imbalance: 9.3 %
+
+NOTE: 9.3 % performance was lost because the PME ranks
+      had less work to do than the PP ranks.
+      You might want to decrease the number of PME ranks
+      or decrease the cut-off and the grid spacing.
+
+
+               Core t (s)   Wall t (s)        (%)
+       Time:      378.422       15.768     2399.9
+                 (ns/day)    (hour/ns)
+Performance:       54.806        0.438
+
+GROMACS reminds you: "If we knew what it was we were doing, it would not be called research, would it?" (Albert Einstein)
+
