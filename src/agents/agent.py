@@ -33,6 +33,8 @@ class _TrackedMessageList(list):
         super().__init__(*args, **kwargs)
         self.full_log: List[Dict[str, Any]] = list(self)
 
+        
+
     def append(self, item):
         super().append(item)
         self.full_log.append(item)
@@ -66,7 +68,7 @@ class BaseAgent(ABC):
         self.model_supports_system_messages = model_supports_system_messages
 
         self.tool_schemas = None
-        self.messages: _TrackedMessageList = _TrackedMessageList()
+        self.messages = _TrackedMessageList()
         self.llm_cost = 0
 
         self.logger = utils.get_class_logger(self.__class__.__name__, log_file=self.sandbox_dir / "run.log")

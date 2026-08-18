@@ -17,4 +17,4 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "sandbox"
 AGENT_LOGS = Path(__file__).resolve().parent.parent / "agent_logs"
 JSON_LOG_FILE = AGENT_LOGS / "agent_runs.jsonl"
 
-MMPBSA_ENV_DIR = Path("/home/hackathon/miniforge3/envs/gmxMMPBSA/bin/gmx_MMPBSA")
+MMPBSA_ENV_DIR = Path("/path/to/miniconda3/envs/gmxMMPBSA/bin/gmx_MMPBSA")
