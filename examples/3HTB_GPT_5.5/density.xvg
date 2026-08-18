@@ -1,0 +1,35 @@
+# This file was created Fri May  8 16:50:06 2026
+# Created by:
+#                       :-) GROMACS - gmx energy, 2023 (-:
+# 
+# Executable:   /usr/local/gromacs/bin/gmx
+# Data prefix:  /usr/local/gromacs
+# Working dir:  /home/hackathon/DynaMate_salome/sandbox/run_20260508_164924
+# Command line:
+#   gmx energy -f npt.edr -o density.xvg
+# gmx energy is part of G R O M A C S:
+#
+# Guyana Rwanda Oman Macau Angola Cameroon Senegal
+#
+@    title "GROMACS Energies"
+@    xaxis  label "Time (ps)"
+@    yaxis  label "(kg/m^3)"
+@TYPE xy
+@ view 0.15, 0.15, 0.75, 0.85
+@ legend on
+@ legend box on
+@ legend loctype view
+@ legend 0.78, 0.8
+@ legend length 2
+@ s0 legend "Density"
+    0.000000  896.106018
+    1.000000  900.138489
+    2.000000  907.890076
+    3.000000  912.509277
+    4.000000  918.841431
+    5.000000  924.109436
+    6.000000  930.734863
+    7.000000  938.316406
+    8.000000  945.135620
+    9.000000  950.813354
+   10.000000  955.026184

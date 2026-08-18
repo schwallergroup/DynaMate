@@ -1,0 +1,94 @@
+                       :-) GROMACS - gmx grompp, 2023 (-:
+
+Executable:   /usr/local/gromacs/bin/gmx
+Data prefix:  /usr/local/gromacs
+Working dir:  /home/hackathon/DynaMate_salome/sandbox/run_20260508_164924
+Command line:
+  gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -o md.tpr
+
+Ignoring obsolete mdp entry 'title'
+Ignoring obsolete mdp entry 'ns_type'
+Generating 1-4 interactions: fudge = 0.5
+Number of degrees of freedom in T-Coupling group Protein_JZ4 is 6604.79
+Number of degrees of freedom in T-Coupling group Water_and_ions is 86253.21
+Last frame         -1 time   10.000   
+
+GROMACS reminds you: "Never mind, death professor, your structure's fine" (TV on the Radio)
+
+Setting the LD random seed to -302026753
+
+Generated 903 of the 903 non-bonded parameter combinations
+
+Generated 903 of the 903 1-4 parameter combinations
+
+Excluding 3 bonded neighbours molecule type 'system1'
+
+turning H bonds into constraints...
+
+Excluding 3 bonded neighbours molecule type 'JZ4'
+
+turning H bonds into constraints...
+
+Excluding 3 bonded neighbours molecule type 'Cl-'
+
+turning H bonds into constraints...
+
+Excluding 3 bonded neighbours molecule type 'WAT'
+
+turning H bonds into constraints...
+
+The largest distance between excluded atoms is 0.436 nm between atom 1878 and 1885
+
+Determining Verlet buffer for a tolerance of 0.005 kJ/mol/ps at 300 K
+
+Calculated rlist for 1x1 atom pair-list as 1.294 nm, buffer size 0.094 nm
+
+Set rlist, assuming 4x4 atom pair-list, to 1.222 nm, buffer size 0.022 nm
+
+Note that mdrun will redetermine rlist based on the actual pair-list setup
+
+Reading Coordinates, Velocities and Box size from old trajectory
+
+Will read whole trajectory
+
+Using frame at t = 10 ps
+
+Starting time for run is 0 ps
+Calculating fourier grid dimensions for X Y Z
+Using a fourier grid of 48x48x56, spacing 0.157 0.159 0.150
+
+Estimate for the relative computational load of the PME mesh part: 0.16
+
+This run will generate roughly 4 Mb of data
+                       :-) GROMACS - gmx mdrun, 2023 (-:
+
+Executable:   /usr/local/gromacs/bin/gmx
+Data prefix:  /usr/local/gromacs
+Working dir:  /home/hackathon/DynaMate_salome/sandbox/run_20260508_164924
+Command line:
+  gmx mdrun -v -deffnm md
+
+Reading file md.tpr, VERSION 2023 (single precision)
+Changing nstlist from 20 to 100, rlist from 1.222 to 1.34
+
+1 GPU selected for this run.
+Mapping of GPU IDs to the 2 GPU tasks in the 1 rank on this node:
+  PP:0,PME:0
+PP tasks will do (non-perturbed) short-ranged interactions on the GPU
+PP task will update and constrain coordinates on the GPU
+PME tasks will do all aspects on the GPU
+Using 1 MPI thread
+Using 12 OpenMP threads 
+
+starting mdrun 'Generic title'
+5000 steps,     10.0 ps.
+step 0step 100, remaining wall clock time:     2 s          step 200, remaining wall clock time:     1 s          step 300, remaining wall clock time:     1 s          step 400, remaining wall clock time:     1 s          step 500, remaining wall clock time:     1 s          step 600, remaining wall clock time:     1 s          step 700, remaining wall clock time:     1 s          step 800, remaining wall clock time:     1 s          step 900, remaining wall clock time:     1 s          step 1000, remaining wall clock time:     1 s          step 1100, remaining wall clock time:     1 s          step 1200, remaining wall clock time:     1 s          step 1300, remaining wall clock time:     1 s          step 1400, remaining wall clock time:     1 s          step 1500, remaining wall clock time:     1 s          step 1600, remaining wall clock time:     1 s          step 1700, remaining wall clock time:     1 s          step 1800, remaining wall clock time:     1 s          step 1900, remaining wall clock time:     1 s          step 2000, remaining wall clock time:     1 s          step 2100, remaining wall clock time:     0 s          step 2200, remaining wall clock time:     0 s          step 2300, remaining wall clock time:     0 s          step 2400, remaining wall clock time:     0 s          step 2500, remaining wall clock time:     0 s          step 2600, remaining wall clock time:     0 s          step 2700, remaining wall clock time:     0 s          step 2800, remaining wall clock time:     0 s          step 2900, remaining wall clock time:     0 s          step 3000, remaining wall clock time:     0 s          step 3100, remaining wall clock time:     0 s          step 3200, remaining wall clock time:     0 s          step 3300, remaining wall clock time:     0 s          step 3400, remaining wall clock time:     0 s          step 3500, remaining wall clock time:     0 s          step 3600, remaining wall clock time:     0 s          step 3700, remaining wall clock time:     0 s          step 3800, remaining wall clock time:     0 s          step 3900, remaining wall clock time:     0 s          step 4000, remaining wall clock time:     0 s          step 4100, remaining wall clock time:     0 s          step 4200, remaining wall clock time:     0 s          step 4300, remaining wall clock time:     0 s          step 4400, remaining wall clock time:     0 s          step 4500, remaining wall clock time:     0 s          step 4600, remaining wall clock time:     0 s          step 4700, remaining wall clock time:     0 s          step 4800, remaining wall clock time:     0 s          step 4900, remaining wall clock time:     0 s          
+Writing final coordinates.
+step 5000, remaining wall clock time:     0 s          
+               Core t (s)   Wall t (s)        (%)
+       Time:       21.148        1.762     1199.9
+                 (ns/day)    (hour/ns)
+Performance:      490.328        0.049
+
+GROMACS reminds you: "Go back to the rock from under which you came" (Fiona Apple)
+
