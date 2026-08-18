@@ -1,0 +1,20 @@
+# This file was created Fri May  8 16:50:25 2026
+# Created by:
+#                        :-) GROMACS - gmx rms, 2023 (-:
+# 
+# Executable:   /usr/local/gromacs/bin/gmx
+# Data prefix:  /usr/local/gromacs
+# Working dir:  /home/hackathon/DynaMate_salome/sandbox/run_20260508_164924
+# Command line:
+#   gmx rms -s md.tpr -f md_noPBC.xtc -o rmsd.xvg -tu ns
+# gmx rms is part of G R O M A C S:
+#
+# Gravel Rubs Often Many Awfully Cauterized Sores
+#
+@    title "RMSD"
+@    xaxis  label "Time (ns)"
+@    yaxis  label "RMSD (nm)"
+@TYPE xy
+@ subtitle "Backbone after lsq fit to Backbone"
+   0.0000000    0.0005013
+   0.0100000    0.0714435

@@ -1,0 +1,49 @@
+Molecular dynamics analysis summary for 3HTB-JZ4
+
+Simulation setup:
+- Protein-ligand system: 3HTB with ligand JZ4
+- Force field: Amber ff14SB for protein, GAFF/antechamber-derived parameters for ligand
+- Solvent/ions: TIP3P water, neutralized with chloride ions
+- Temperature: 300 K
+- Production length: 0.01 ns
+
+Preparation notes:
+- Protein and ligand were separated and prepared successfully.
+- Ligand JZ4 was protonated at pH 7 by the preparation tool.
+- Literature search was attempted, but no local paper database/PDF files were available; therefore ligand/protein protonation could not be independently verified from literature in this run.
+- ACE/NME terminal caps were added.
+- Histidines were renamed according to present ring protons.
+- tleap completed with warnings about duplicate atom names/alternate conformations in the PDB; LEaP handled these by keeping the first occurrence and ignoring duplicates.
+
+Equilibration summary:
+- Energy minimization converged to Fmax < 1000 kJ/mol/nm in 1122 steps.
+- Final potential energy: -6.8232956e+05 kJ/mol.
+- Maximum force after minimization: 8.3087543e+02 kJ/mol/nm.
+- NPT pressure average over the short equilibration: -280.165 bar.
+- NPT density average over the short equilibration: 925.436 kg/m^3.
+
+Production and trajectory analysis:
+- Production trajectory contains frames at 0.000 and 0.010 ns, so all statistics are very limited and should be interpreted only as a technical sanity check, not as converged biophysical observables.
+
+RMSD:
+- Backbone RMSD relative to initial production frame increased from 0.0005013 nm at 0 ns to 0.0714435 nm at 0.01 ns.
+- Backbone RMSD relative to the minimized/crystal reference increased from 0.0335332 nm at 0 ns to 0.0744069 nm at 0.01 ns.
+- This indicates only small structural displacement during this very short production run.
+
+RMSF:
+- Per-residue RMSF values range approximately from 0.0060 nm to 0.0744 nm.
+- Largest RMSF values occur around residues 77, 108, 160, 2, 52, 158 and nearby terminal/flexible regions, but the 0.01 ns sampling is too short for robust flexibility conclusions.
+
+Radius of gyration:
+- Protein radius of gyration changed from 1.65568 nm at 0 ps to 1.66564 nm at 10 ps.
+- This small change suggests no large-scale compaction or unfolding over the short trajectory.
+
+Hydrogen bonds:
+- Main-chain/main-chain hydrogen bonds: 93 at 0 ns, 85 at 0.01 ns.
+- Side-chain/side-chain hydrogen bonds: 24 at 0 ns, 24 at 0.01 ns.
+- Protein-water hydrogen bonds: 337 at 0 ns, 339 at 0.01 ns.
+- Protein-ligand hydrogen bonds: 1 at 0 ns, 1 at 0.01 ns.
+
+Conclusion:
+- The MD pipeline completed successfully and produced the expected prepared structures, topology, equilibrated system, production trajectory, PBC-corrected trajectory, and basic analysis files.
+- The very short 0.01 ns production run is suitable as a pipeline validation test only. Longer simulations are recommended for meaningful stability, binding, and dynamics interpretation.
