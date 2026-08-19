@@ -1,0 +1,33 @@
+MD analysis summary for 3HTB-JZ4
+================================
+
+Simulation overview:
+- Protein-ligand system: 3HTB with ligand JZ4
+- Temperature: 300 K
+- Production length: 0.01 ns
+
+RMSD:
+- Backbone RMSD started at 0.00049 nm at 0 ns
+- Backbone RMSD reached 0.06738 nm at 0.01 ns
+- Interpretation: the protein backbone remained close to the starting structure over the very short trajectory, with a modest increase by the end of the run.
+
+RMSF:
+- Residue fluctuations were generally low across the protein.
+- Most residues were in the range of about 0.01-0.06 nm.
+- The largest fluctuations observed in the extracted file were near residues 38, 131-143, and 164, with values up to about 0.079 nm and 0.070 nm.
+- Interpretation: the protein core appears relatively stable, while a few loop/terminal regions are more flexible.
+
+Radius of gyration:
+- Rg was 1.65337 nm at 0 ps
+- Rg was 1.66210 nm at 10 ps
+- Interpretation: the overall compactness of the protein was essentially unchanged during the sampled trajectory.
+
+Hydrogen bonds:
+- Main-chain hydrogen bonds: 89 at 0 ns, 87 at 0.01 ns
+- Side-chain hydrogen bonds: 26 at 0 ns, 23 at 0.01 ns
+- Protein-water hydrogen bonds: 334 at 0 ns, 341 at 0.01 ns
+- Protein-ligand hydrogen bonds: 1 at 0 ns, 1 at 0.01 ns
+- Interpretation: internal protein hydrogen bonding remained stable, hydration interactions were strong, and at least one persistent protein-ligand hydrogen bond was present.
+
+Overall conclusion:
+- The short MD trajectory suggests a structurally stable protein-ligand complex with limited backbone drift, low per-residue fluctuations, preserved compactness, and maintained protein-ligand interaction.

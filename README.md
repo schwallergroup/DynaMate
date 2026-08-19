@@ -2,13 +2,13 @@
   <img src="assets/DynaMate.svg" alt="drawing" width="250"/>
 </p>
 
-DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipped with a collection of tools for the full GROMACS/AMBER workflow. Quality checks throughout the pipeline trigger retries when something goes wrong, allowing the agent to correct course and save you time on debugging. The agent communicates interactively — asking clarifying questions, validating parameters, and answering follow-up questions about results. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
+DynaMate is your reliable ***mate*** that can run molecular ***dyna***mics simulations of protein-ligand and protein-only systems. It is built using LiteLLM and equipped with a collection of tools for the full GROMACS/AMBER workflow. Quality checks throughout the pipeline trigger retries when something goes wrong, allowing the agent to correct course and save you time on debugging. The agent communicates interactively, asking clarifying questions, validating parameters, and answering follow-up questions about results. You can find our preprint [here](https://arxiv.org/abs/2512.10034).
 
 ## Key features
 * Autonomous protein-ligand MD simulations and binding affinity calculations
 * Error analysis and automatic correction with retry logic
 * Binding affinity calculations with MM/PB(GB)SA method
-* Interactive agent chat — the agent asks clarifying questions and accepts follow-up queries after the pipeline completes
+* Interactive agent chat: the agent asks clarifying questions and accepts follow-up queries after the pipeline completes
 * Literature-informed parameters via PaperQA search over your own PDFs
 
 ## Software setup
@@ -31,8 +31,8 @@ Building the Docker image takes approximately 2-3 minutes.
 2. Create an `.env` file to store sensitive data like API keys:
 
 ```
-OPENROUTER_API_KEY=your_key_here        # Required: used by the MD pipeline via LiteLLM
-OPENAI_API_KEY=your_key_here            # Optional: used by PaperQA for literature search
+OPENROUTER_API_KEY=your_key_here   # Required: used by the MD pipeline via LiteLLM
+OPENAI_API_KEY=your_key_here       # Optional: used by PaperQA for literature search
 ```
 
 3. Run the agent in interactive mode:
@@ -209,8 +209,8 @@ After the MD pipeline completes, the MDAgent enters a chat mode where you can as
 
 ### Pipeline overview
 
-1. **PrepAgent** — Fetches and prepares the PDB structure, identifies ligands, searches your literature (if `my_papers/` exists), and generates a simulation plan with parameters.
-2. **MDAgent** — Executes the full GROMACS/AMBER workflow: PDB preparation, ligand parameterization (if applicable), topology building with tleap, energy minimization, NVT/NPT equilibration, production MD (default 0.1 ns), and trajectory analysis (RMSD, RMSF, radius of gyration, hydrogen bonds). Results are saved to `analysis.txt`. If any step fails, the agent analyzes the error and retries with corrected inputs.
+1. **PrepAgent**: Fetches and prepares the PDB structure, identifies ligands, searches your literature (if `my_papers/` exists), and generates a simulation plan with parameters.
+2. **MDAgent**: Executes the full GROMACS/AMBER workflow: PDB preparation, ligand parameterization (if applicable), topology building with tleap, energy minimization, NVT/NPT equilibration, production MD (default 0.1 ns), and trajectory analysis (RMSD, RMSF, radius of gyration, hydrogen bonds). Results are saved to `analysis.txt`. If any step fails, the agent analyzes the error and retries with corrected inputs.
 
 <p align="center">
   <img src="assets/MDAgent-Tools-workflow.png" alt="drawing" width="900"/>
