@@ -225,7 +225,7 @@ nstenergy               = 500       ; save energies every 1.0 ps
 nstlog                  = 500       ; update log file every 1.0 ps
 nstxout-compressed      = 500       ; save coordinates every 1.0 ps
 ; Bond parameters
-continuation            = yes       ; continuing from NVT 
+continuation            = no       ; continuing from NVT 
 constraint_algorithm    = lincs     ; holonomic constraints 
 constraints             = h-bonds   ; bonds to H are constrained 
 lincs_iter              = 1         ; accuracy of LINCS
@@ -250,18 +250,15 @@ tc-grps                 = Protein Water_and_ions    ; two coupling groups - more
 tau_t                   = 0.1   0.1                     ; time constant, in ps
 ref_t                   = {float(md_temp)}   {float(md_temp)}                     ; reference temperature, one for each group, in K
 ; Pressure coupling
-pcoupl                  = Berendsen                     ; pressure coupling is on for NPT
-pcoupltype              = isotropic                     ; uniform scaling of box vectors
-tau_p                   = 2.0                           ; time constant, in ps
-ref_p                   = 1.0                           ; reference pressure, in bar
-compressibility         = 4.5e-5                        ; isothermal compressibility of water, bar^-1
-refcoord_scaling        = com
+pcoupl                  = no
 ; Periodic boundary conditions
 pbc                     = xyz       ; 3-D PBC
 ; Dispersion correction is not used for proteins with the C36 additive FF
 DispCorr                = no 
 ; Velocity generation
-gen_vel                 = no        ; velocity generation off after NVT 
+gen_vel                 = yes       ; assign velocities from Maxwell distribution
+gen_temp                = {float(md_temp)}       ; temperature for Maxwell distribution
+gen_seed                = -1        ; generate a random seed
 ''')
     nvt_mdp_infile.close()
 
