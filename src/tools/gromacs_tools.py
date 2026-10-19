@@ -363,11 +363,13 @@ def gromacs_production(sandbox_dir: str, input_gro: str, npt_cpt_file: str, md_t
 
     # ---------- Create md.mdp file --------------
     nsteps = int(((float(md_duration)) * 1000000) / 2)  # Convert ns to number of steps (2 fs per step)
+    duration_ps = int(nsteps)*2/1000
+    duration_ns = int(duration_ps)/1000
     md_mdp_infile = open(f'{sandbox_dir}/md.mdp', 'w' )
     md_mdp_infile.write(f'''title                   = Protein-ligand complex MD simulation 
 ; Run parameters
 integrator              = md        ; leap-frog integrator
-nsteps                  = {nsteps}   ; 2 * 500,000 = 1000 ps (0.1 ns)
+nsteps                  = {nsteps}   ; 2 * {nsteps} = {duration_ps} ps ({duration_ns} ns)
 dt                      = 0.002     ; 2 fs
 ; Output control
 nstenergy               = 5000     ; save energies every 10.0 ps
