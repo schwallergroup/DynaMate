@@ -4,6 +4,7 @@ import sys
 from typing import Dict, Any, List
 from pydantic import BaseModel
 import litellm
+from openai import OpenAI
 from src.tools import tool_schema
 from src.agents.agent import BaseAgent
 from src.prompts import PREP_SYSTEM_PROMPT
