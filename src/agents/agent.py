@@ -250,7 +250,7 @@ class BaseAgent(ABC):
             temperature=self.temperature,
             supports_system_message=self.model_supports_system_messages,
             messages=messages,
-            web_search_options={"search_context_size": "medium"},
+            # web_search_options={"search_context_size": "medium"},
             tools=self.tool_schemas,
             tool_choice="auto",
         )

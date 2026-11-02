@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, Any
 import json
 import litellm
+from openai import OpenAI
 
 from src.agents.agent import BaseAgent, ToolOutputError
 from src.prompts import MD_SYSTEM_PROMPT
