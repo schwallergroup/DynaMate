@@ -5,6 +5,7 @@ from dotenv import load_dotenv, set_key
 import shutil
 import tyro
 from dataclasses import dataclass
+from typing import Literal
 
 from src.agents import MDAgent, PrepAgent
 from src import utils
@@ -50,6 +51,15 @@ class CommandLineArgs:
     duration: float | None = None
     "Simulation length in nanoseconds."
 
+    ph: float | None = None
+    "pH used to protonate the protein and ligand."
+
+    ionic_environment: Literal["physiological", "neutral"] | None = None
+    "Ionic environment: physiological (0.15 M NaCl) or neutral (counter-ions only). Chosen by the agent if not given."
+
+    test: bool = False
+    "Test run: NVT and NPT equilibration kept at 10 ps each, without extension."
+
     model_supports_system_messages: bool = True
 
 
@@ -79,15 +89,19 @@ def main(config: CommandLineArgs):
         ligand_name=config.ligand,
         md_temp=config.temp,
         md_duration=config.duration,
+        ph=config.ph,
         model_supports_system_messages=config.model_supports_system_messages,
+        ionic_environment=config.ionic_environment,
     )
     prep_agent.setup_tools()
     pdb_file_path, ligand_name, plan, llm_cost = prep_agent.run()
     root_logger.info("PrepAgent completed. Plan generated.")
 
-    md_temp, md_duration = plan["parameters"]["temperature_k"], plan["parameters"]["duration_ns"]
+    md_temp, md_duration, ph = plan["parameters"]["temperature_k"], plan["parameters"]["duration_ns"], plan["parameters"]["ph"]
 
-    root_logger.info(f"Applying parameters: Temp={md_temp}K, Duration={md_duration}ns")
+    ionic_environment, ionic_conc = plan["parameters"]["ionic_environment"], plan["parameters"]["ionic_conc_m"]
+
+    root_logger.info(f"Applying parameters: Temp={md_temp}K, Duration={md_duration}ns, pH={ph}, ions={ionic_environment} ({ionic_conc} M NaCl)")
 
     root_logger.info("\n=== Starting MDAgent (Execution & Tool Loop) ===")
 
@@ -100,8 +114,11 @@ def main(config: CommandLineArgs):
         ligand_name=ligand_name,
         md_temp=md_temp,
         md_duration=md_duration,
+        ph=ph,
         model_supports_system_messages=config.model_supports_system_messages,
         plan=plan,
+        test_mode=config.test,
+        ionic_conc=ionic_conc,
     )
     md_agent.setup_tools()
 

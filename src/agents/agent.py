@@ -55,6 +55,7 @@ class BaseAgent(ABC):
         ligand_name: str | None = None,
         md_temp: float | None = None,
         md_duration: float | None = None,
+        ph: float | None = None,
         model_supports_system_messages: bool = True,
     ):
         self.model_name = model_name
@@ -64,6 +65,7 @@ class BaseAgent(ABC):
         self.ligand_name = ligand_name
         self.md_temp = md_temp
         self.md_duration = md_duration
+        self.ph = ph
 
         self.model_supports_system_messages = model_supports_system_messages
 

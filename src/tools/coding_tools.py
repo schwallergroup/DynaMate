@@ -81,7 +81,18 @@ def grep_file(path: str, pattern: str) -> str:
         return f"Error searching file: {str(e)}"
 
 
-def edit_file(path: str, old_text: str, new_text: str) -> str:
+# Ligand structure, parameter and provenance files: only changed through prepare_pdb_file_ligand / set_ligand_protonation
+PROTECTED_LIGAND_SUFFIXES = {".pdb", ".sdf", ".mol2", ".frcmod", ".lib", ".prmtop", ".inpcrd", ".itp", ".prm", ".gro", ".json", ".smi"}
+
+
+def edit_file(path: str, old_text: str, new_text: str, ligand_name: str | None = None) -> str:
+    name = Path(path).name
+    if ligand_name and name.upper().startswith(ligand_name.upper()) and Path(path).suffix in PROTECTED_LIGAND_SUFFIXES:
+        return (
+            f"Editing {name} is not allowed: ligand structure and parameter files can only be changed through the tools. "
+            "To change the protonation state of the ligand, use set_ligand_protonation (with a candidate_id, or a SMILES "
+            "and a literature reference) and a rationale, then run param_ligand, run_tleap_ligand and run_tleap_protein again."
+        )
     try:
         if os.path.exists(path) and old_text:
             with open(path, "r", encoding="utf-8") as f:

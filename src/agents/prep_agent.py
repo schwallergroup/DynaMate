@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 from pydantic import BaseModel
 import litellm
 from src.tools import tool_schema
+from src import constants
 from src.agents.agent import BaseAgent
 from src.prompts import PREP_SYSTEM_PROMPT
 
@@ -27,7 +28,9 @@ class PrepAgent(BaseAgent):
         ligand_name=None,
         md_temp=None,
         md_duration=None,
+        ph=None,
         model_supports_system_messages=True,
+        ionic_environment=None,
     ):
         super().__init__(
             model_name,
@@ -37,9 +40,11 @@ class PrepAgent(BaseAgent):
             ligand_name,
             md_temp,
             md_duration,
+            ph,
             model_supports_system_messages
         )
 
+        self.ionic_environment = ionic_environment
         self.pdb_file_path = None
         self.user_temp = None
         self.agent_plan = ""
@@ -228,14 +233,70 @@ class PrepAgent(BaseAgent):
 
         return duration
 
+    def _find_ph(self):
+        ph = self.ph
+
+        while ph is None:
+            user_input = "Please pick a suitable pH for running the molecular dynamics simulation. Also provide a rational for why you selected this pH. Write the selected value as 'pH X' (e.g. pH 7.4)."
+            response = self._prompt_llm(user_input)
+            tool_calls = response.tool_calls
+
+            if tool_calls:
+                self.logger.info(f"Length of tool calls: {len(tool_calls)}")
+                self.messages.append(response)
+
+                for tool_call in tool_calls:
+                    self._process_tool_call(tool_call)
+
+            else:
+                assistant_message = {"role": "assistant", "content": response.content}
+                self.messages.append(assistant_message)
+                match = re.search(r"pH\s*(?:of|=|:|is)?\s*(\d+(?:\.\d+)?)", response.content or "")
+                ph = float(match.group(1)) if match else 7.0
+                self.logger.info(f"Rational for picking simulation pH {ph}: {response.content}")
+
+        return ph
+
+    def _find_ionic_environment(self):
+        ionic_environment = self.ionic_environment
+        options = ", ".join(f"'{name}' ({conc} M NaCl)" for name, conc in constants.IONIC_ENVIRONMENTS.items())
+
+        while ionic_environment is None:
+            user_input = (
+                "Please choose the ionic environment of the simulation box. The system is always neutralized with Na+/Cl- counter-ions; "
+                f"the options are {options}. Choose 'physiological' for a protein that works at physiological salt (e.g. a human or "
+                "mammalian protein in cells or blood), or 'neutral' for a protein from a low-salt environment (e.g. an environmental "
+                "protein) where only counter-ions should be added. Also provide a rational for why you selected this environment. "
+                "Write the selected option as 'Ionic environment: physiological' or 'Ionic environment: neutral'."
+            )
+            response = self._prompt_llm(user_input)
+            tool_calls = response.tool_calls
+
+            if tool_calls:
+                self.logger.info(f"Length of tool calls: {len(tool_calls)}")
+                self.messages.append(response)
+
+                for tool_call in tool_calls:
+                    self._process_tool_call(tool_call)
+
+            else:
+                assistant_message = {"role": "assistant", "content": response.content}
+                self.messages.append(assistant_message)
+                match = re.search(r"ionic environment\s*:?\s*\**\s*(physiological|neutral)", response.content or "", re.I)
+                ionic_environment = match.group(1).lower() if match else constants.DEFAULT_IONIC_ENVIRONMENT
+                self.logger.info(f"Rational for picking the ionic environment {ionic_environment}: {response.content}")
+
+        return ionic_environment
+
     def _generate_plan(self, temperature, duration):
         if self.ligand_name:
             steps = [
                 {"step": "prepare_pdb_file_ligand", "description": "Clean and preprocess PDB file for protein-ligand system"},
-                {"step": "add_caps", "description": "Add N- and C-terminal capping groups."},
-                {"step": "rename_histidines", "description": "Rename HIS to HIE, HIP or HID."},
-                {"step": "param_ligand", "description": "Generate ligand parameters using antechamber or acpype."},
-                {"step": "run_tleap_ligand", "description": "Build system topology and solvate complex using tleap."},
+                {"step": "add_caps", "description": "Cap truncated chain ends with ACE/NME, leave real termini uncapped."},
+                {"step": "protonate_protein", "description": "Protonate the protein at the simulation pH with PDB2PQR (PROPKA)."},
+                {"step": "param_ligand", "description": "Assign ligand partial charges with antechamber and write the ligand mol2 file."},
+                {"step": "run_tleap_ligand", "description": "Parameterize the ligand with GAFF2 using parmchk2 and tleap, and convert it to GROMACS format (.itp, .prm, .gro)."},
+                {"step": "run_tleap_protein", "description": "Parameterize the protein with ff14SB using tleap, build topol.top including the ligand and create complex.gro."},
                 {"step": "gromacs_equil", "description": "Perform energy minimization and equilibration."},
                 {"step": "gromacs_production", "description": "Run production MD simulation."},
                 {"step": "gromacs_analysis", "description": "Analyse production MD simulation."},
@@ -243,9 +304,9 @@ class PrepAgent(BaseAgent):
         else:
             steps = [
                 {"step": "prepare_pdb_file_ligand","description": "Clean and preprocess PDB file for protein-only system."},
-                {"step": "add_caps", "description": "Add N- and C-terminal capping groups."},
-                {"step": "rename_histidines", "description": "Rename HIS to HIE, HIP or HID."},
-                {"step": "run_tleap", "description": "Build system topology and solvate complex using tleap."},
+                {"step": "add_caps", "description": "Cap truncated chain ends with ACE/NME, leave real termini uncapped."},
+                {"step": "protonate_protein", "description": "Protonate the protein at the simulation pH with PDB2PQR (PROPKA)."},
+                {"step": "run_tleap_protein", "description": "Parameterize the protein with ff14SB using tleap and build topol.top."},
                 {"step": "gromacs_equil", "description": "Perform energy minimization and equilibration."},
                 {"step": "gromacs_production", "description": "Run production MD simulation."},
                 {"step": "gromacs_analysis", "description": "Analyse production MD simulation."},
@@ -256,7 +317,11 @@ class PrepAgent(BaseAgent):
             "pdb_file_path": self.pdb_file_path,
             "ligand": self.ligand_name,
             "plan": steps,
-            "parameters": {"temperature_k": float(temperature), "duration_ns": float(duration)},
+            "parameters": {
+                "temperature_k": float(temperature), "duration_ns": float(duration), "ph": float(self.ph),
+                "ionic_environment": self.ionic_environment,
+                "ionic_conc_m": constants.IONIC_ENVIRONMENTS[self.ionic_environment],
+            },
         }
 
         return plan
@@ -291,6 +356,14 @@ class PrepAgent(BaseAgent):
         if self.md_duration is None:
             self.md_duration = self._calculate_duration()
         self.logger.info(f"Using simulation duration: {self.md_duration} ns")
+
+        if self.ph is None:
+            self.ph = self._find_ph()
+        self.logger.info(f"Using simulation pH: {self.ph}")
+
+        if self.ionic_environment is None:
+            self.ionic_environment = self._find_ionic_environment()
+        self.logger.info(f"Using ionic environment: {self.ionic_environment} ({constants.IONIC_ENVIRONMENTS[self.ionic_environment]} M NaCl)")
 
         # Build plan steps depending on ligand
         plan = self._generate_plan(self.md_temp, self.md_duration)

@@ -16,7 +16,7 @@ MD_SYSTEM_PROMPT = """You are an MD execution assistant. You have access to tool
             You should use the tools to solvate, equilibrate, and run MD in sequence,
             starting with a simulation using GROMACS and the Amber force field ff14sb.
 
-            First, if the system is a protein-ligand complex, separate the protein and ligands into two separate pdb files. If a ligand is present, protonate it at the appropriate pH. Check that the protonation is accurate based on a literature search.
+            First, if the system is a protein-ligand complex, separate the protein and ligands into two separate pdb files. If a ligand is present, it is protonated automatically at the simulation pH and the states predicted by Dimorphite-DL and pkasolver are compared. If they disagree or the state is ambiguous, check the literature and, if needed, change the state with set_ligand_protonation, giving a rationale (and a reference for states not predicted by either tool). Never edit ligand files directly.
             Then, if a ligand is present, parameterise the ligand using antechamber with Amber.
             If the system is a protein-ligand complex, merge the two into complex.pdb, otherwise if the system is a protein alone, keep only the protein atoms.
             Next, parameterise the system using tleap, which allows to create a box, solvate, add ions to neutralise and prepare the 'topol.top' file. In the tleap step, the protein will be protonated. Check that the protonation is accurate by doing a literature search, and that the protein was protonated at the optimum pH.

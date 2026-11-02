@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from pdbfixer import PDBFixer
 from openmm.app import PDBFile
 from Bio.PDB import PDBList
@@ -6,8 +7,12 @@ import subprocess, shlex
 import MDAnalysis as mda  # type: ignore
 import numpy as np
 from collections import defaultdict
+from rdkit import Chem, rdBase
+from rdkit.Chem import AllChem
 import traceback
+from pathlib import Path
 from src.utils import get_class_logger
+from src.tools.ligand_protonation import protonate_ligand, summarize_record, LigandProtonationError
 
 logger = get_class_logger(__name__, log_to_file=False)
 
@@ -22,7 +27,7 @@ def fix_pdb_file(input_pdb: str, fixed_pdb: str) -> str:
     This is a publically available API that fixes a PDB file using PDBFixer and writes the output to a new file. This
     function should only be called when the input PDB file is known to have  issues, otherwise it may introduce new problems.
     Actions applied:
-      - Removes waters
+      - Removes heterogens (ligands, ions), keeps waters
       - Finds missing residues (reports them but does not add)
       - Finds missing atoms
       - Adds missing heavy atoms (but no hydrogens)
@@ -35,8 +40,8 @@ def fix_pdb_file(input_pdb: str, fixed_pdb: str) -> str:
     # Load a PDB file
     fixer = PDBFixer(filename=input_pdb)
 
-    # Remove water molecules
-    fixer.removeHeterogens(keepWater=False)
+    # Remove heterogens (ligands, ions) but keep water molecules
+    fixer.removeHeterogens(keepWater=True)
 
     # Identify problems
     fixer.findMissingResidues()
@@ -44,7 +49,7 @@ def fix_pdb_file(input_pdb: str, fixed_pdb: str) -> str:
 
     # PDBFixer cannot auto-add missing residues; just reports them.
     if fixer.missingResidues:
-        logger.warning("Missing residues detected:", fixer.missingResidues)
+        logger.warning(f"Missing residues detected: {fixer.missingResidues}")
 
     # Apply fixes (only adds missing atoms, no hydrogens)
     fixer.addMissingAtoms()
@@ -126,21 +131,24 @@ def check_pdb_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = None) -> 
 
     return "PDB file check completed successfully."
 
-def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = None) -> str:
+def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ph: float, ligand_name: str = None) -> str:
     """
-    Takes input PDB file, extract ligand to ligand_name.pdb.
-    Removes HETATM, CONECT and MASTER lines from input_pdb and saves to prepared_pdb.
-    Protonates ligand and pH=7 and saves to ligand_name_h.pdb.
+    Takes input PDB file. Fixes it with PDBFixer, removes HETATM, CONECT and MASTER lines and saves the protein to {pdb_id}_prepared.pdb.
+    The protein is protonated later, after capping, by protonate_protein.
+    If there is one ligand, extract it from the original PDB file to ligand_name.pdb. If there are multiple ligands, extract each to a separate file named ligand_name_{index}.pdb.
+    Protonates ligand at the given pH and saves to ligand_name_h.pdb (or ligand_name_{index}_h.pdb if there are multiple ligands).
     Args:
-        input_pdb (str): The path where the input PDB file is located.
-        prepared_pdb (str): The path where we save the prepared PDB file.
-        ligand_name (str): The name of the ligand to extract.
-        ligand_pdb (str): The path where we save the extracted ligand PDB file.
-        ligand_pdb_h (str): The path where we save the protonated ligand PDB file.
+        sandbox_dir (str): Directory where the input PDB file is located and where output files will be saved.
+        pdb_id (str): The 4-character PDB ID (e.g., '1abc').
+        ph (float): pH at which the protonation state is chosen.
+        ligand_name (str): Optional: the name of the ligand if a protein-ligand complex should be simulated.
     """
+    # Fix PDB file if necessary
+    fix_pdb_file(f"{sandbox_dir}/{pdb_id}.pdb", f"{sandbox_dir}/{pdb_id}_fixed.pdb")
+
     # Prepare PDB
     with (
-        open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile,
+        open(f"{sandbox_dir}/{pdb_id}_fixed.pdb", "r") as infile,
         open(f"{sandbox_dir}/{pdb_id}_prepared.pdb", "w") as outfile,
     ):
         for line in infile:
@@ -148,13 +156,13 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
                 outfile.write(line)
     logger.info(f"Prepared PDB file saved to {sandbox_dir}/{pdb_id}_prepared.pdb")
 
-    # Extract ligand
+    # Extract ligand from the original PDB file (fix_pdb_file removes all heterogens)
     if (ligand_name is not None) and (ligand_name != "XXX") and (ligand_name != "None") and (ligand_name != "None_h"):
         # Count number of ligands
         ligand_keys = set()
         with open(f"{sandbox_dir}/{pdb_id}.pdb") as f:
             for line in f:
-                if line.startswith("HETATM") and line[17:20].strip() == ligand_name:
+                if line.startswith("HETATM") and line[17:20].strip() == ligand_name and line[16] in (" ", "A"):
                     chain = line[21]
                     resnum = int(line[22:26])
                     ligand_keys.add((chain, resnum))
@@ -171,7 +179,7 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
             ligand_pdb_files_list = [ligand_pdb_file]
             with open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile, open(ligand_pdb_file, "w") as outfile:
                 for line in infile:
-                    if line.startswith("HETATM") and line[17:20].strip() == ligand_name:
+                    if line.startswith("HETATM") and line[17:20].strip() == ligand_name and line[16] in (" ", "A"):
                         outfile.write(line)
             logger.info(f"Extracted ligand {ligand_name} to {ligand_pdb_file}")
         
@@ -183,7 +191,7 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
             # Collect HETATM lines by residue number
             with open(f"{sandbox_dir}/{pdb_id}.pdb", "r") as infile:
                 for line in infile:
-                    if line.startswith("HETATM") and line[17:20].strip() == ligand_name:
+                    if line.startswith("HETATM") and line[17:20].strip() == ligand_name and line[16] in (" ", "A"):
                         chain = line[21].strip() or "_"
                         resnum = int(line[22:26])
                         ligands[(chain, resnum)].append(line)
@@ -198,92 +206,143 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ligand_name: str = No
 
     # Protonate ligand
     list_protonated_files = []
+    records = []
     if (ligand_name is not None) and (ligand_name != "XXX") and (ligand_name != "None") and (ligand_name != "None_h"):
         for ligand_pdb_file in ligand_pdb_files_list: # loop over all extracted ligands
             if num_ligands == 1:
-                protonated_file = f"{sandbox_dir}/{ligand_name}_h.pdb"
+                protonated_prefix = f"{ligand_name}_h"
             else:
-                index = ligand_pdb_file.split("_")[-1].split(".")[0]  # get index from filename
-                protonated_file = f"{sandbox_dir}/{ligand_name}_{index}_h.pdb"
+                index = Path(ligand_pdb_file).stem.split("_")[-1]  # get index from filename
+                protonated_prefix = f"{ligand_name}_{index}_h"
 
-            list_protonated_files.append(protonated_file)
-            
-            cmd = shlex.split(f"obabel {ligand_pdb_file} -O {protonated_file} -p7")
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if result.returncode != 0 or not os.path.exists(protonated_file):
-                error_detail = result.stderr.decode(errors="replace").strip() or result.stdout.decode(errors="replace").strip()
-                return f"obabel failed to protonate {ligand_pdb_file} (return code {result.returncode}): {error_detail}"
-            with open(protonated_file, "r") as infile:
-                lines = infile.readlines()
-                filtered_lines = [line for line in lines if not (line.startswith("CONECT") or line.startswith("MASTER"))]
-                new_filtered_lines = [line.replace("UNL", ligand_name).replace("UNK", ligand_name) for line in filtered_lines]
-            with open(protonated_file, "w") as outfile:
-                outfile.writelines(new_filtered_lines)
+            list_protonated_files.append(f"{protonated_prefix}.pdb")
+            # protonate_ligand works with file names relative to sandbox_dir
+            try:
+                records.append(protonate_ligand(sandbox_dir, Path(ligand_pdb_file).name, protonated_prefix, ligand_name, ph=ph))
+            except (LigandProtonationError, RuntimeError) as e:
+                logger.error(f"Ligand protonation failed with error: {e}")
+                return f"Ligand protonation failed with error: {e}"
 
-        # Rewrite atoms names in the ligand
-        ELEMENTS = {"H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca","Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr","Rb","Sr","Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","In","Sn","Sb","Te","I","Xe","Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Tl","Pb","Bi","Po","At","Rn","Fr","Ra",
-            # Transition metals sometimes used in PDBs
-            "U","Pu",
-        }
-
-        def normalize_element(e):
-            """Convert PDB element field to normalized chemical element symbol."""
-            e = e.strip().capitalize()
-            if len(e) == 2:
-                return e[0] + e[1].lower()
-            return e
-
-        with open(list_protonated_files[0], "r") as infile:
-            lines = infile.readlines()
-
-            counters = defaultdict(int)
-            new_lines = []
-
-            for idx, line in enumerate(lines, start=1):
-                if line.startswith(("ATOM", "HETATM")):
-                    raw_name = line[12:16].strip()
-                    raw_element = line[76:78]  # columns 77–78
-                    element = normalize_element(raw_element)
-
-                    if element not in raw_name:
-                        logger.info(f'Atom name "{raw_name}" in {list_protonated_files[0]} will be changed to "{element}" because atom names need to be written with this format.')
-                    
-                    if element not in ELEMENTS:
-                        logger.error(
-                            f'Unknown element "{element}" (from raw field "{raw_element.strip()}") found at line {idx} of {list_protonated_files[0]}. Atom name in file: "{raw_name}". Please check the ligand PDB {list_protonated_files[0]}: unexpected element.'
-                        )
-
-                        # keep the line unchanged
-                        new_lines.append(line)
-                        continue
-
-                    # Known element → rename it
-                    counters[element] += 1
-                    new_name = f"{element}{counters[element]}"
-
-                    # Replace atom name in columns 13–16
-                    line = f"{line[:12]}{new_name:>4}{line[16:]}"
-
-                new_lines.append(line)
-
-            with open(list_protonated_files[0], "w") as outfile:
-                outfile.writelines(new_lines)
-
-            logger.info(f"Atom renaming of ligand {list_protonated_files[0]} completed.")
+        # Only the first ligand is simulated: report its protonation (candidates, agreement between predictors)
+        protonation_report = summarize_record(records[0])
 
         if num_ligands == 1:
-            return f"Successfully Prepared PDB structure with a ligand and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand PDB file to {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH=7 and atom names were cleaned (renumbered)"
-        if num_ligands > 1:
-            return f"Successfully Prepared PDB structure with {num_ligands} ligands and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}.pdb and the {num_ligands} protonated ligand PDB files to {sandbox_dir}/{list_protonated_files}. This list of {num_ligands} protonated files: {list_protonated_files} is IMPORTANT and should be the input parameter for future functions. The extracted pdb file was saved to {sandbox_dir}/{pdb_id}_prepared.pdb Ligands were protonated at pH=7 and atom names were cleaned (renumbered)"
+            message = f"Successfully Prepared PDB structure with a ligand and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the protonated ligand to {sandbox_dir}/{ligand_name}_h.sdf and {sandbox_dir}/{ligand_name}_h.pdb. Ligand was protonated at pH={ph} and atom names were cleaned (renumbered). The protonation decision is logged in {ligand_name}_h_protonation.json.\n{protonation_report}"
+        else:
+            message = f"Successfully Prepared PDB structure with {num_ligands} ligands and saved the extracted protein PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb and the {num_ligands} protonated ligand PDB files to {sandbox_dir}/{list_protonated_files}. This list of {num_ligands} protonated files: {list_protonated_files} is IMPORTANT and should be the input parameter for future functions. Ligands were protonated at pH={ph} (.sdf and .pdb files) and atom names were cleaned (renumbered). Only the first ligand is simulated, its protonation decision is logged in {Path(list_protonated_files[0]).stem}_protonation.json.\n{protonation_report}"
+        logger.info(message)
+        return message
 
 
-    return f"Successfully Prepared PDB structure without a ligand and saved the extracted PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb"
+    return f"Successfully Prepared PDB structure without a ligand and saved the extracted PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb. The protein is not protonated yet: run add_caps and then protonate_protein."
+
+def find_truncated_termini(pdb_file: str) -> dict[str, tuple[bool, bool]]:
+    """
+    Finds which protein chain ends are truncated, i.e. have residues in the SEQRES records that are missing
+    before the first or after the last observed residue (found with PDBFixer).
+    Without SEQRES records no residues are reported missing, so every chain end is treated as a real terminus.
+
+    Args:
+        pdb_file (str): Path of the original PDB file (with SEQRES records).
+    Returns:
+        {chain_id: (n_terminus_truncated, c_terminus_truncated)}
+    """
+    fixer = PDBFixer(filename=pdb_file)
+    fixer.removeHeterogens(keepWater=False)
+    fixer.findMissingResidues()
+
+    chains = list(fixer.topology.chains())
+    truncated = {chain.id: [False, False] for chain in chains}
+    for (chain_index, residue_index), missing in fixer.missingResidues.items():
+        chain = chains[chain_index]
+        n_residues = len(list(chain.residues()))
+        if n_residues == 0:
+            continue
+        if residue_index == 0:
+            truncated[chain.id][0] = True
+            logger.info(f"Chain {chain.id}: {len(missing)} residues missing before the N-terminus, it will be capped with ACE")
+        elif residue_index == n_residues:
+            truncated[chain.id][1] = True
+            logger.info(f"Chain {chain.id}: {len(missing)} residues missing after the C-terminus, it will be capped with NME")
+        else:
+            logger.warning(f"Chain {chain.id}: {len(missing)} residues ({'-'.join(missing)}) missing inside the chain, before residue index {residue_index}. "
+                           "This gap is not modelled and tleap will bond the residues on each side of the gap.")
+
+    return {chain_id: tuple(ends) for chain_id, ends in truncated.items()}
+
+
+def insert_ter_after_chain_ends(pdb_file: str) -> int:
+    """
+    Makes sure there is one TER record after the end of each chain, so that tleap treats each chain end as a
+    terminus (charged or capped) and does not bond consecutive chains.
+    A chain end is detected when the chain ID changes, after an NME cap, or after a residue containing an OXT atom.
+    Existing TER records are kept, duplicated ones are removed. The file is overwritten.
+
+    Args:
+        pdb_file (str): Path of the PDB file to edit.
+    Returns:
+        Number of TER records in the written file.
+    """
+    with open(pdb_file, "r") as f:
+        lines = f.readlines()
+
+    output_lines = []
+    prev_chain = None
+    prev_residue = None
+    prev_is_chain_end = False  # previous residue is an NME cap or contains an OXT atom
+    has_end_record = False
+
+    def add_ter():
+        if output_lines and not output_lines[-1].startswith("TER"):
+            output_lines.append("TER\n")
+
+    for line in lines:
+        record = line[:6].strip()
+
+        if record in ("ATOM", "HETATM"):
+            chain_id = line[21]
+            residue = line[17:27]  # residue name, chain ID, residue number, insertion code
+
+            # New residue: insert TER if the previous residue ended a chain
+            if prev_residue is not None and residue != prev_residue:
+                if chain_id != prev_chain or prev_is_chain_end:
+                    add_ter()
+                prev_is_chain_end = False
+
+            if line[17:20].strip() == "NME" or line[12:16].strip() == "OXT":
+                prev_is_chain_end = True
+
+            output_lines.append(line)
+            prev_chain, prev_residue = chain_id, residue
+
+        elif record == "TER":
+            add_ter()
+
+        elif record in ("END", "ENDMDL"):
+            add_ter()
+            output_lines.append(line)
+            has_end_record = True
+
+        else:
+            output_lines.append(line)
+
+    if not has_end_record:
+        add_ter()
+
+    with open(pdb_file, "w") as f:
+        f.writelines(output_lines)
+
+    n_ter = sum(1 for line in output_lines if line.startswith("TER"))
+    logger.info(f"{n_ter} TER records written in {pdb_file}")
+    return n_ter
 
 
 def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
     """
-    Adds ACE and NME caps to the N- and C-termini of the protein in the input PDB file.
-    Saves the modified structure to {sandbox_dir}/{pdb_id}_prepared_capped.pdb.
+    Adds ACE and NME caps to the N- and C-termini of the protein chains in the input PDB file, only where the chain
+    end is truncated (residues missing compared to the SEQRES records of the original {pdb_id}.pdb).
+    Real chain ends are left uncapped so that tleap treats them as charged termini.
+    Saves the modified structure to {sandbox_dir}/{pdb_id}_prepared_capped.pdb (also written if no cap is added).
 
     Args:
         input_pdb (str): The path where the input PDB file is located.
@@ -397,54 +456,65 @@ def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
 
         return C1_position, C2_position, O_position
 
+    # Find which chain ends are truncated from the SEQRES records of the original PDB file
+    truncated = find_truncated_termini(f"{sandbox_dir}/{pdb_id}.pdb")
+
     # Load pdb file
     u = mda.Universe(f"{sandbox_dir}/{input_pdb}")
 
     # Access each fragment separately
     res_start = 0
     segment_universes = []
+    report = []
 
     for seg in u.segments:
         chain = u.select_atoms(f"segid {seg.segid}")
+        chain_id = chain.chainIDs[0] if hasattr(chain, "chainIDs") else seg.segid
+        if chain_id not in truncated:
+            logger.warning(f"Chain {chain_id} of {input_pdb} not found in the chains of {pdb_id}.pdb ({list(truncated)}): its ends are left uncapped.")
+        cap_n, cap_c = truncated.get(chain_id, (False, False))
+        report.append(f"chain {chain_id}: N-terminus {'capped with ACE' if cap_n else 'left uncapped'}, C-terminus {'capped with NME' if cap_c else 'left uncapped'}")
 
         # Add ACE
-        resid_c = chain.residues.resids[0]
-        end_residue = u.select_atoms(f"segid {seg.segid} and resid {resid_c}")
-        ace_positions = get_ace_pos(end_residue)
-        ace_names = ["C", "CH3", "O"]
-        resid = chain.residues.resids[0]
-        kwargs = dict(
-            n_atoms=len(ace_positions),
-            name=ace_names,
-            resname=len(ace_names) * ["ACE"],
-            positions=ace_positions,
-            resids=resid * np.ones(len(ace_names)),
-            segid=chain.segids[0],
-        )
+        if cap_n:
+            resid_c = chain.residues.resids[0]
+            end_residue = u.select_atoms(f"segid {seg.segid} and resid {resid_c}")
+            ace_positions = get_ace_pos(end_residue)
+            ace_names = ["C", "CH3", "O"]
+            resid = chain.residues.resids[0]
+            kwargs = dict(
+                n_atoms=len(ace_positions),
+                name=ace_names,
+                resname=len(ace_names) * ["ACE"],
+                positions=ace_positions,
+                resids=resid * np.ones(len(ace_names)),
+                segid=chain.segids[0],
+            )
 
-        ace_universe = create_universe(**kwargs)
+            ace_universe = create_universe(**kwargs)
 
-        # Add NME
+        # Add NME (methyl carbon named CH3 as in ff14SB)
         resid_c = chain.residues.resids[-1]
         end_residue = u.select_atoms(f"segid {seg.segid} and resid {resid_c}")
+        if cap_c:
+            nme_positions = get_nme_pos(end_residue)
+            nme_names = ["N", "CH3"]
 
-        nme_positions = get_nme_pos(end_residue)
-        nme_names = ["N", "C"]
+            resid = chain.residues.resids[-1] + 2
 
-        resid = chain.residues.resids[-1] + 2
+            kwargs = dict(
+                n_atoms=len(nme_names),
+                name=nme_names,
+                resname=len(nme_names) * ["NME"],
+                positions=nme_positions,
+                resids=resid * np.ones(len(nme_names)),
+                segid=chain.segids[0],
+            )
 
-        kwargs = dict(
-            n_atoms=len(nme_names),
-            name=nme_names,
-            resname=len(nme_names) * ["NME"],
-            positions=nme_positions,
-            resids=resid * np.ones(len(nme_names)),
-            segid=chain.segids[0],
-        )
+            nme_universe = create_universe(**kwargs)
 
-        nme_universe = create_universe(**kwargs)
-        ## Merge Universe
-        if "OXT" in end_residue.names:
+        ## Merge Universe: the OXT of a capped C-terminus is replaced by the NME nitrogen
+        if cap_c and "OXT" in end_residue.names:
             index = np.where(end_residue.names == "OXT")[0][0]
             OXT = end_residue[index]
 
@@ -453,17 +523,20 @@ def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
         else:
             Chain = u.select_atoms(f"segid {seg.segid}")
 
-        ### Merge ACE, Protien and NME
-        u_all = mda.Merge(ace_universe.atoms, Chain, nme_universe.atoms)
+        ### Merge ACE, Protein and NME
+        parts = ([ace_universe.atoms] if cap_n else []) + [Chain] + ([nme_universe.atoms] if cap_c else [])
+        u_all = mda.Merge(*parts)
 
         # to renumber residues
-        resids_ace = [res_start + 1, res_start + 1, res_start + 1]
-        resids_pro = np.arange(resids_ace[0] + 1, Chain.residues.n_residues + resids_ace[0] + 1)
-        resids_nme = [resids_pro[-1] + 1, resids_pro[-1] + 1]
+        first_resid = res_start + 1
+        resids_ace = [first_resid] * 3 if cap_n else []
+        first_pro = first_resid + 1 if cap_n else first_resid
+        resids_pro = np.arange(first_pro, first_pro + Chain.residues.n_residues)
+        resids_nme = [resids_pro[-1] + 1] * 2 if cap_c else []
 
         u_all.atoms.residues.resids = np.concatenate(
             [resids_ace, resids_pro, resids_nme]
-        )  # np.arange (1+res_start, len(u_all.atoms.residues.resids)+res_start+1)
+        )
         res_start = u_all.atoms.residues.resids[-1]
         segment_universes.append(u_all)
 
@@ -471,44 +544,39 @@ def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
     all_uni = mda.Merge(*(seg.atoms for seg in segment_universes))
     all_uni.atoms.write(f"{sandbox_dir}/{pdb_id}_prepared_capped.pdb")
 
-    def insert_ter(pdb_in):
-        with open(pdb_in, "r") as f:
-            lines = f.readlines()
+    insert_ter_after_chain_ends(f"{sandbox_dir}/{pdb_id}_prepared_capped.pdb")
 
-        output_lines = []
-        prev_resname = None
+    logger.info("Capping: " + "; ".join(report))
+    return f"Capping done ({'; '.join(report)}). Only truncated chain ends were capped with ACE/NME, real chain ends were left uncapped so that they are charged by tleap. Saved to {sandbox_dir}/{pdb_id}_prepared_capped.pdb"
 
-        for i, line in enumerate(lines):
-            record = line[:6].strip()
 
-            if record in ("ATOM", "HETATM"):
-                resname = line[17:20].strip()
+def protonate_protein(sandbox_dir: str, input_pdb: str, pdb_id: str, ph: float) -> str:
+    """
+    Protonates the protein at the given pH with PDB2PQR (pKa prediction with PROPKA, AMBER residue and atom names,
+    e.g. HID/HIE/HIP for histidines). Should be run after add_caps.
+    Writes {input_pdb stem}.pqr and {pdb_id}_pdb2pqr.pdb, the input of run_tleap_protein.
 
-                # Insert TER if previous residue was NME and current is ACE
-                if prev_resname == "NME" and resname == "ACE":
-                    output_lines.append("TER\n")
+    Args:
+        sandbox_dir (str): Directory where the input PDB file is located and where output files will be saved.
+        input_pdb (str): The capped protein PDB file, relative to sandbox_dir (e.g. {pdb_id}_prepared_capped.pdb).
+        pdb_id (str): The PDB ID.
+        ph (float): pH at which the protonation states are chosen.
+    """
+    pqr_file = f"{Path(input_pdb).stem}.pqr"
+    pdb_output = f"{pdb_id}_pdb2pqr.pdb"
+    cmd = f"pdb2pqr30 -ff=AMBER --titration-state-method=propka --with-ph={ph} --ffout=AMBER --keep-chain --pdb-output={pdb_output} {input_pdb} {pqr_file}"
+    run_1 = subprocess.run(shlex.split(cmd), cwd=sandbox_dir, capture_output=True, text=True)
+    if run_1.returncode != 0 or not Path(f"{sandbox_dir}/{pdb_output}").exists():
+        error_text = "\n".join(filter(None, [run_1.stderr, run_1.stdout]))
+        logger.error(f"PDB2PQR failed with error: {error_text}")
+        return f"PDB2PQR failed with error: {error_text}"
 
-                output_lines.append(line)
-                prev_resname = resname
+    logger.info(f"PDB2PQR output saved to {sandbox_dir}/{pqr_file} and {sandbox_dir}/{pdb_output}")
 
-            elif record == "END":
-                # Insert TER before END if the last record wasn't TER already
-                if not output_lines[-1].startswith("TER"):
-                    output_lines.append("TER\n")
-                output_lines.append(line)
+    # Make sure each chain end is followed by a TER record for tleap
+    n_ter = insert_ter_after_chain_ends(f"{sandbox_dir}/{pdb_output}")
 
-            else:
-                output_lines.append(line)
-
-        if os.path.exists(pdb_in):
-            os.remove(pdb_in)
-
-        with open(pdb_in, "w") as f:
-            f.writelines(output_lines)
-
-    insert_ter(f"{sandbox_dir}/{pdb_id}_prepared_capped.pdb")
-
-    return f"Successfully added ACE and NME caps to the N- and C-termini of the protein and saved to {sandbox_dir}/{pdb_id}_prepared_capped.pdb"
+    return f"Protein protonated at pH={ph} with PDB2PQR (PROPKA). Saved to {sandbox_dir}/{pdb_output} (input for run_tleap_protein, {n_ter} TER records, one per chain end) and {sandbox_dir}/{pqr_file}."
 
 
 def rename_histidines(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:

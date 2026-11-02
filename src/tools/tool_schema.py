@@ -108,16 +108,20 @@ def create_tool_schema_prep(sandbox_dir):
     ]
 
 
-def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
+def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id, ph):
     tools = [
         Tool(
             name="prepare_pdb_file_ligand",
             description=(
                 "For protein-ligand complexes and protein-only comlexes. This tool will prepare the PDB files:"
-                "One pdb file containing the protein only, without solvent and ligand."
+                "One pdb file containing the protein only, without solvent and ligand. The protein is NOT protonated by this tool: it is protonated later with protonate_protein, after add_caps. "
                 "If one or more ligands are present, one pdb file will be created per ligand, without solvent and protein."
-                f"If there is one ligand, the ligand file is named {ligand_name}.pdb and is then protonated and saved to {ligand_name}_h.pdb. You should check the protonation of the ligand in the literature to make sure it has been properly protonated at the appropriate pH."
-                f"If there are multiple ligands (i ligands), the ligand files are named {ligand_name}_i.pdb and is then protonated and saved to {ligand_name}_i_h.pdb.."
+                f"If there is one ligand, the ligand file is named {ligand_name}.pdb and is then protonated and saved to {ligand_name}_h.sdf and {ligand_name}_h.pdb. "
+                f"If there are multiple ligands (i ligands), the ligand files are named {ligand_name}_i.pdb and are then protonated and saved to {ligand_name}_i_h.sdf and {ligand_name}_i_h.pdb. "
+                "Ligand protonation: bond orders are taken from the PDB Chemical Component Dictionary (or perceived by Open Babel), the state at the pH predicted by Dimorphite-DL is applied "
+                "and compared with the state predicted by pkasolver. All candidate states, the agreement between the two predictors and the selected state are logged in "
+                f"{ligand_name}_h_protonation.json and reported in the output of this tool. If the output reports a disagreement or an ambiguous state, look for literature evidence "
+                "and, if needed, change the state with set_ligand_protonation. Never edit the ligand files directly. "
                 f"The output protein PDB file is named {pdb_id}_prepared.pdb."
             ),
             parameters={
@@ -133,6 +137,12 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                             f"The PDB ID of the structure to be prepared: {pdb_id}. The PDB file {pdb_id}.pdb must exist in the sandbox_dir."
                         ),
                     },
+                    "ph": {
+                        "type": "number",
+                        "description": (
+                            f"The pH at which the protonation state of the ligand is chosen: {ph}."
+                        ),
+                    },
                     "ligand_name": {
                         "type": "string",
                         "description": (
@@ -140,16 +150,17 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         ),
                     },
                 },
-                "required": ["path", "pdb_id", "ligand_name"],
+                "required": ["path", "pdb_id", "ph", "ligand_name"],
             },
         ),
         Tool(
             name="add_caps",
             description=(
-                f"Add ACE and NME caps to the N- and C-termini of a protein PDB file. "
-                "This script is used if the pdb file was imported from the PDB database and is missing caps. "
-                "This script should be run after the PDB file has been prepared from prepare_pdb_file_ligand."
-                f"The input PDB file should be named {pdb_id}_prepared.pdb and the output file will be named {pdb_id}_prepared_capped.pdb."
+                "Add ACE and NME caps to the N- and C-termini of the protein chains, ONLY where the chain end is truncated "
+                f"(residues listed in the SEQRES records of {pdb_id}.pdb are missing before the first or after the last observed residue). "
+                "Real chain ends are left uncapped so that tleap treats them as charged termini. If the PDB file has no SEQRES records, no caps are added. "
+                "This tool should be run after prepare_pdb_file_ligand and before protonate_protein, for both protein-only and protein-ligand systems. "
+                f"The input PDB file should be named {pdb_id}_prepared.pdb and the output file will be named {pdb_id}_prepared_capped.pdb (written even if no cap is added)."
             ),
             parameters={
                 "type": "object",
@@ -176,10 +187,45 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
             },
         ),
         Tool(
+            name="protonate_protein",
+            description=(
+                "Protonate the protein at the given pH with PDB2PQR (pKa prediction with PROPKA, AMBER residue and atom names). "
+                "Histidines are renamed to HID, HIE or HIP according to their protonation state, so rename_histidines is not needed. "
+                "This tool must be run after add_caps and before run_tleap_protein, for both protein-only and protein-ligand systems. "
+                f"The input PDB file should be named {pdb_id}_prepared_capped.pdb. The output files are {pdb_id}_pdb2pqr.pdb (the input of run_tleap_protein) "
+                f"and {pdb_id}_prepared_capped.pqr. You should check in the literature that the protonation states of key residues are appropriate at pH {ph}."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "sandbox_dir": {
+                        "type": "string",
+                        "description": f"The directory path where input files are located and output files are produced (this is the sandbox directory): {sandbox_dir}",
+                    },
+                    "input_pdb": {
+                        "type": "string",
+                        "description": (
+                            f"Capped protein PDB file to be protonated (without the path), named {pdb_id}_prepared_capped.pdb. "
+                            f"This file must exist in the sandbox_dir ({sandbox_dir})."
+                        ),
+                    },
+                    "pdb_id": {
+                        "type": "string",
+                        "description": (f"The PDB ID of the structure to be prepared: {pdb_id}."),
+                    },
+                    "ph": {
+                        "type": "number",
+                        "description": (f"The pH at which the protonation states of the protein are chosen: {ph}."),
+                    },
+                },
+                "required": ["sandbox_dir", "input_pdb", "pdb_id", "ph"],
+            },
+        ),
+        Tool(
             name="rename_histidines",
             description=(
                 "Renames histidines HIS to account for their correct protonation."
-                "This tool should be ran after the protein has been capped with the add_caps function for both protein-only and protein-ligand systems."
+                "This tool is NOT part of the standard workflow: protonate_protein already names histidines HID, HIE or HIP. Only use it if a PDB file still contains HIS residues with hydrogens. "
                 f"The input PDB file should be named {pdb_id}_prepared_capped.pdb and the output file will be named {pdb_id}_prepared_capped_his.pdb."
                 "HIS will be renamed to HID if it contains HD1 and not HE2."
                 "HIS will be renamed to HIE if it contains HE2 and not HD1."
@@ -210,54 +256,57 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
             },
         ),
         Tool(
-            name="run_tleap",
+            name="set_ligand_protonation",
             description=(
-                "Prepare the molecular system using Amber’s tleap utility. "
-                "The script should ONLY be used for protein-only systems. Ligands are NOT included and should be processed with the run_tleap_ligand tool. "
-                "This script should be run after the PDB file has been prepared and capped if necessary. "
-                "This is the FIRST step in the molecular dynamics (MD) pipeline when the force field ff14sb is chosen and the system is a protein alone (without a ligand). "
-                "The tleap process parameterizes the biomolecule using the Amber force field ff14sb, "
-                f"generates Amber topology ({pdb_id}.prmtop) and coordinate ({pdb_id}.inpcrd) files. "
-                f"ParmEd is then used to convert these files to GROMACS format (topol.top, {pdb_id}.gro). "
-                "It executes the shell script 'run_tleap.sh' in the working directory specified by sandbox_dir ({sandbox_dir}). "
-                "All input and output files are read from and written to this directory. "
-                "If tleap fails, inspect the PDB for missing atoms or nonstandard residues."
+                "Change the protonation state (charge state or tautomer) of the ligand. This is the ONLY way to change the ligand protonation: "
+                "the ligand files cannot be edited directly. Use it when prepare_pdb_file_ligand reports a disagreement between Dimorphite-DL and pkasolver "
+                "or an ambiguous state and you have decided which state is correct, or when the literature supports another state. "
+                f"Choose one of the candidate states listed in {ligand_name}_h_protonation.json (candidate_id), or give a SMILES of the full ligand with all its "
+                "hydrogens and charges implicit in the SMILES (a literature reference is then required if the state is not one of the candidates). "
+                "The state must have the same heavy atoms and connectivity as the crystal pose; only hydrogens, charges and bond orders can change. "
+                "The tool rebuilds the ligand .sdf/.pdb, logs your decision and rationale, and moves files built from the previous state to a stale_protonation_* folder. "
+                "Afterwards param_ligand, run_tleap_ligand, run_tleap_protein and the GROMACS steps must be run again."
             ),
             parameters={
                 "type": "object",
                 "properties": {
-                    "sandbox_dir": {
+                    "ligand_file": {
                         "type": "string",
                         "description": (
-                            "Absolute path to the working directory where tleap should be executed. All output files (.prmtop, .inpcrd) will be saved here."
+                            f"The protonated ligand file (without path): {ligand_name}_h.pdb, or {ligand_name}_1_h.pdb if there are multiple ligands."
                         ),
                     },
-                    "input_pdb": {
+                    "candidate_id": {
                         "type": "string",
-                        "description": (
-                            "Input PDB structure file to be processed by tleap. "
-                            "This file must exist in the provided sandbox_dir."
-                            f"If the PDB file was previously prepared, capped and proper histidines renamed, input_pdb will be {pdb_id}_prepared_capped_his.pdb."
-                        ),
+                        "description": "Id of one of the candidate states (e.g. 'C2'), as listed in the output of prepare_pdb_file_ligand. Give either candidate_id or smiles.",
                     },
-                    "pdb_id": {
+                    "smiles": {
                         "type": "string",
-                        "description": (f"The PDB ID of the structure to be prepared: {pdb_id}. "),
+                        "description": "SMILES of the ligand in the new protonation state. Give either candidate_id or smiles.",
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": "Why this state is chosen (e.g. which predictor is trusted and why, experimental pKa, literature evidence).",
+                    },
+                    "reference": {
+                        "type": "string",
+                        "description": "Literature reference (DOI or citation) supporting the state. Required when the SMILES is not one of the candidate states.",
                     },
                 },
-                "required": ["sandbox_dir", "input_pdb", "pdb_id"],
+                "required": ["ligand_file", "rationale"],
             },
         ),
         Tool(
             name="param_ligand",
             description=(
                 "If the protein-ligand system contains more than one ligand, only the first one will be kept and parameterized. Nevertheless, the full list of ligands should be parsed as ligand_files."
-                "Parameterize a small molecule ligand using Amber's antechamber and parmchk2 utilities. "
-                "This tool generates the necessary files for including a ligand in molecular dynamics simulations. "
-                "It creates a mol2 file with assigned charges, a prepi file for the ligand, and a frcmod file containing any missing force field parameters. "
-                f"The input ligand file should be in PDB format, protonated ({ligand_name}_h.pdb) and located in the specified sandbox_dir ({sandbox_dir}). "
-                "The charge of the ligand will be automatically determined from the structure by generating a mol2 file. "
-                f"The output files ({ligand_name}.mol2, {ligand_name}.prepi, {ligand_name}.frcmod) will be saved in the same sandbox_dir ({sandbox_dir})."
+                "Assign partial charges to a small molecule ligand using Amber's antechamber utility (AM1-BCC charges, GAFF2 atom types). "
+                "This tool must be run before run_tleap_ligand. "
+                f"The input ligand file is the protonated ligand ({ligand_name}_h.pdb) located in the specified sandbox_dir ({sandbox_dir}); antechamber reads the matching {ligand_name}_h.sdf "
+                "so that bond orders and formal charges are kept. The net charge is the one of the selected protonation state. "
+                "Before and after antechamber, the tool checks that the ligand files are consistent with the selected protonation state and were not modified outside the tools; "
+                "if the check fails, the ligand must be protonated again with prepare_pdb_file_ligand or set_ligand_protonation. "
+                f"The output mol2 file has the same name as the input ligand file with a .mol2 extension (e.g. {ligand_name}_h.mol2) and is saved in the same sandbox_dir ({sandbox_dir})."
             ),
             parameters={
                 "type": "object",
@@ -275,7 +324,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                             "List of input PDB file(s) of the protonated ligand(s) to be parameterized "
                             "(without full path). If there is only one ligand, provide a list with one element, "
                             f"e.g. ['{ligand_name}_h.pdb']. If there are multiple ligands, provide a list such as "
-                            f"['{ligand_name}_h_1.pdb', '{ligand_name}_h_2.pdb'] where the ligands are indexed starting at 1. "
+                            f"['{ligand_name}_1_h.pdb', '{ligand_name}_2_h.pdb'] where the ligands are indexed starting at 1. "
                             f"All files must exist in the sandbox directory ({sandbox_dir})."
                         ),
                     },
@@ -292,61 +341,83 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
         Tool(
             name="run_tleap_ligand",
             description=(
-                "Prepare the molecular system using Amber’s tleap utility."
-                "This script should ONLY be used for a protein-ligand complex, so if the user specifies that ligand should be included in the simulation. "
-                "This is the FIRST step in the molecular dynamics (MD) pipeline when the force field ff14sb is chosen. "
-                "First a file complex.gro is created by combining the protein PDB file and the ligand PDB file. "
-                f"To process the ligand, previously the ligand must have been parameterized with the param_ligand tool, generating the files {ligand_name}.mol2, {ligand_name}.prepi and {ligand_name}.frcmod. "
-                "The tleap process parameterizes the protein-ligand complex using the Amber force field ff14sb, "
-                f"generates Amber topology ({pdb_id}.prmtop) and coordinate ({pdb_id}.inpcrd) files. "
-                f"ParmEd is then used to convert these files to GROMACS format (topol.top, {pdb_id}.gro). "
-                "It executes the shell script 'run_tleap_ligand.sh' in the working directory specified by 'sandbox_dir' ({sandbox_dir}). "
-                "All input and output files are read from and written to this directory. "
-                "If tleap fails, inspect the PDB for missing atoms or nonstandard residues."
+                "Parameterize the ligand with the GAFF2 force field using Amber's parmchk2 and tleap utilities. "
+                "This tool should ONLY be used for a protein-ligand complex, so if the user specifies that a ligand should be included in the simulation. "
+                "It must be run AFTER param_ligand (which creates the ligand mol2 file) and BEFORE run_tleap_protein. "
+                f"parmchk2 generates the missing force field parameters ({ligand_name}.frcmod), then tleap generates {ligand_name}.prmtop, {ligand_name}.inpcrd and {ligand_name}.lib. "
+                f"ParmEd is then used to convert these files to GROMACS format: the ligand topology {ligand_name}.itp, the ligand atom types {ligand_name}.prm and the ligand coordinates {ligand_name}.gro. "
+                "The charge of the last ligand atom is adjusted so that the total ligand charge is an integer. "
+                f"All input and output files are read from and written to the sandbox_dir ({sandbox_dir}). "
+                "If tleap fails, inspect the mol2 file for wrong atom types or missing atoms."
             ),
             parameters={
                 "type": "object",
                 "properties": {
-                    "input_pdb": {
-                        "type": "string",
-                        "description": (
-                            f"Input PDB of the protein (without ligand) to be merged with ligand file (don't provide full path). "
-                            f"If the protein has been prepared and capped, it will be called {pdb_id}_prepared_capped.pdb. "
-                            "This file must exist in the provided sandbox_dir."
-                        ),
-                    },
                     "sandbox_dir": {
                         "type": "string",
                         "description": (
-                            "Absolute path to the working directory where tleap should be executed. "
-                            "All output files (.prmtop, .inpcrd) will be saved here."
+                            f"Absolute path to the working directory where tleap should be executed: {sandbox_dir}. "
+                            "All output files will be saved here."
+                        ),
+                    },
+                    "ligand_mol2_file": {
+                        "type": "string",
+                        "description": (
+                            "The ligand mol2 file created by the param_ligand tool (don't provide full path). "
+                            f"If there is one ligand, it is called {ligand_name}_h.mol2. If there are multiple ligands, only the first one is used: {ligand_name}_1_h.mol2. "
+                            "This file must exist in the provided sandbox_dir."
+                        ),
+                    },
+                    "ligand_name": {
+                        "type": "string",
+                        "description": (
+                            f"The three-letter residue name of the ligand, in capital letters, called {ligand_name}."
+                        ),
+                    },
+                },
+                "required": ["sandbox_dir", "ligand_mol2_file", "ligand_name"],
+            },
+        ),
+        Tool(
+            name="run_tleap_protein",
+            description=(
+                "Parameterize the protein with the Amber force field ff14SB using Amber's tleap utility. "
+                "This tool must ALWAYS be run, for both protein-only systems and protein-ligand complexes. "
+                "For a protein-ligand complex, it must be run AFTER run_tleap_ligand, because it uses the ligand files "
+                f"{ligand_name}.itp, {ligand_name}.prm and {ligand_name}.gro created by run_tleap_ligand. "
+                f"It must be run after protonate_protein: tleap loads the protonated protein {pdb_id}_pdb2pqr.pdb. "
+                f"tleap generates the Amber topology ({pdb_id}.prmtop), coordinates ({pdb_id}.inpcrd) and {pdb_id}_tleap.pdb. "
+                f"ParmEd is then used to convert these files to GROMACS format (topol.top, {pdb_id}_tleap.gro). "
+                "topol.top is then edited to add the position restraint includes for the protein chains, the water and ion parameters "
+                "and, if a ligand is given, the ligand parameters, topology and position restraint includes. "
+                f"For a protein-only system the output structure is {pdb_id}_tleap.gro. "
+                "For a protein-ligand complex, the protein and ligand coordinates are combined into complex.gro. "
+                f"All input and output files are read from and written to the sandbox_dir ({sandbox_dir}). "
+                "If tleap fails, inspect the input file for missing atoms or nonstandard residues."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "sandbox_dir": {
+                        "type": "string",
+                        "description": (
+                            f"Absolute path to the working directory where tleap should be executed: {sandbox_dir}. "
+                            "All output files will be saved here."
                         ),
                     },
                     "pdb_id": {
                         "type": "string",
                         "description": (f"The PDB ID of the structure to be prepared: {pdb_id}. "),
                     },
-                    "ligand_files": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "description": (
-                            "List of input PDB file(s) of the protonated ligand(s) to be parameterized "
-                            "(without full path). If there is only one ligand, provide a list with one element, "
-                            f"e.g. ['{ligand_name}_h.pdb']. If there are multiple ligands, provide a list such as "
-                            f"['{ligand_name}_h_1.pdb', '{ligand_name}_h_2.pdb'] where the ligands are indexed starting at 1. "
-                            f"All files must exist in the sandbox directory ({sandbox_dir})."
-                        ),
-                    },
                     "ligand_name": {
                         "type": "string",
                         "description": (
-                            f"The three-letter residue name of the ligand to extract from the PDB file, in capital letters, called {ligand_name}."
+                            f"The three-letter residue name of the ligand, in capital letters, called {ligand_name}. "
+                            "Only provide this argument for a protein-ligand complex. If no ligand was provided by the user, do not input this argument."
                         ),
                     },
                 },
-                "required": ["sandbox_dir", "input_pdb", "pdb_id", "ligand_files", "ligand_name"],
+                "required": ["sandbox_dir", "pdb_id"],
             },
         ),
         Tool(
@@ -357,8 +428,18 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                 This tool should be executed AFTER solvation and ion addition are complete.
 
                 It executes 'equil_Gromacs.sh' inside the working directory provided in
-                'sandbox_dir'. The script performs energy minimization, NVT and NPT
-                equilibration, and possibly production MD.
+                'sandbox_dir' (solvation, ions, energy minimization, NVT), then runs NPT.
+                NVT and NPT last 100 ps each and are checked automatically:
+                - after NVT, the mean temperature over the second half must be within 5 K of md_temp
+                  (temperature.xvg), otherwise NVT is extended by 100 ps;
+                - after NPT, the reference pressure (1 bar) must be within one standard deviation of
+                  the mean pressure (pressure.xvg) and the density must have stabilized between
+                  900 and 1100 kg/m3 (density.xvg), otherwise NPT is extended by 100 ps.
+                The results are reported in the output and saved to equilibration_checks.json.
+                If the output starts with WARNING, the checks still failed after the extensions:
+                tell the user. In test mode (--test) both stages are kept at 10 ps without extension.
+                The system is neutralized with Na+/Cl- counter-ions; the NaCl concentration of the ionic
+                environment chosen in the plan (physiological 0.15 M, or neutral: counter-ions only) is applied automatically.
 
                 Parameter (.mdp) files can be found in the sandbox_dir. All intermediate and output files —
                 including md.tpr, md.xtc, md.edr, and md.log — are generated in the same
@@ -380,7 +461,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                         "description": (
                             "File of the structure to be equilibrated. "
                             "If a protein-ligand complex is simulated, the file will be complex.gro. "
-                            f"If a protein alone is simulated, the file will be {pdb_id}.gro"
+                            f"If a protein alone is simulated, the file will be {pdb_id}_tleap.gro. "
                             "This file must be located within sandbox_dir."
                         ),
                     },
@@ -525,6 +606,8 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id):
                     This tool should be executed AFTER production with the gromacs_production tool is COMPLETE, and the gromacs_analysis tool successfully created the md_noPBC.xtc trajectory file.
                     nsteps and nstxout values can be found in the md.mdp file used for the production run, located in sandbox_dir.
                     The temperature used during the MD simulation is also required for the MMPBSA calculation.
+                    The salt concentration of the GB (saltcon) and PB (istrng) solvent models is set automatically to the NaCl
+                    concentration of the ionic environment chosen in the plan (0.15 M physiological, 0 M neutral).
                     A new directory called gmx_MMPBSA is created and all MMPBSA output files are saved there, including the final binding energy summary file called FINAL_RESULTS_MMPBSA.dat.
                     The final binding energy can be found in FINAL_RESULTS_MMPBSA.dat at the last ΔTOTAL line.
                     """

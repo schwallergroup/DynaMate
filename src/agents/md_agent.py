@@ -15,9 +15,9 @@ class MDAgent(BaseAgent):
     ESSENTIAL_STEPS = {
         "prepare_pdb_file_ligand",
         "add_caps",
-        "rename_histidines",
-        "run_tleap_ligand",
-        "run_gromacs_equil",
+        "protonate_protein",
+        "run_tleap_protein",
+        "gromacs_equil",
         "gromacs_production",
         "gromacs_analysis",
     }
@@ -32,9 +32,12 @@ class MDAgent(BaseAgent):
         ligand_name=None,
         md_temp=None,
         md_duration=None,
+        ph=None,
         model_supports_system_messages=True,
         plan: Dict[str, Any] = None,
         post_pipeline_chat: bool = True,
+        test_mode: bool = False,
+        ionic_conc: float = 0.15,
     ):
         super().__init__(
             model_name,
@@ -44,12 +47,17 @@ class MDAgent(BaseAgent):
             ligand_name,
             md_temp,
             md_duration,
+            ph,
             model_supports_system_messages
         )
 
         self.structure_path = Path(structure_path)
         self.plan = plan
         self.post_pipeline_chat = post_pipeline_chat
+        # Test run: NVT and NPT equilibration kept at 10 ps, without extension
+        self.test_mode = test_mode
+        # NaCl concentration (M) of the ionic environment chosen by the PrepAgent
+        self.ionic_conc = ionic_conc
 
         self.completed_steps = []
         self.completed_summary = ""
@@ -57,12 +65,13 @@ class MDAgent(BaseAgent):
             "{pdb_id}.pdb",
             "{pdb_id}_prepared.pdb",
             "{pdb_id}_prepared_capped.pdb",
-            "{pdb_id}_prepared_capped_his.pdb",
+            "{pdb_id}_prepared_capped.pqr",
+            "{pdb_id}_pdb2pqr.pdb",
             "{pdb_id}.prmtop",
             "{pdb_id}.inpcrd",
             "{pdb_id}_tleap.pdb",
             "topol.top",
-            "{pdb_id}.gro",
+            "{pdb_id}_tleap.gro",
             "topol_without_posre.top",
             "em.gro",
             "nvt.gro",
@@ -72,6 +81,7 @@ class MDAgent(BaseAgent):
             "temperature.xvg",
             "pressure.xvg",
             "density.xvg",
+            "equilibration_checks.json",
             "potential.xvg",
             "md.gro",
             "md.xtc",
@@ -87,18 +97,26 @@ class MDAgent(BaseAgent):
             "{pdb_id}_prepared.pdb",
             ["{ligand_name}.pdb", "{ligand_name}_1.pdb"],
             ["{ligand_name}_h.pdb", "{ligand_name}_1_h.pdb"],
+            ["{ligand_name}_h.sdf", "{ligand_name}_1_h.sdf"],
+            ["{ligand_name}_h_protonation.json", "{ligand_name}_1_h_protonation.json"],
             "{pdb_id}_prepared_capped.pdb",
-            "{pdb_id}_prepared_capped_his.pdb",
-            ["{ligand_name}_h.prepi", "{ligand_name}_1_h.prepi"],
-            ["{ligand_name}.frcmod", "{ligand_name}_h.frcmod", "{ligand_name}_1_h.frcmod"],
-            "complex.pdb",
-            "complex.prmtop",
-            "complex.inpcrd",
-            "complex_tleap.pdb",
-            "topol.top",
-            "complex.gro",
-            "topol_without_posre.top",
+            "{pdb_id}_prepared_capped.pqr",
+            "{pdb_id}_pdb2pqr.pdb",
+            ["{ligand_name}_h.mol2", "{ligand_name}_1_h.mol2"],
+            "{ligand_name}.frcmod",
+            "{ligand_name}.prmtop",
+            "{ligand_name}.inpcrd",
+            "{ligand_name}.lib",
+            "{ligand_name}.itp",
+            "{ligand_name}.prm",
             "{ligand_name}.gro",
+            "{pdb_id}.prmtop",
+            "{pdb_id}.inpcrd",
+            "{pdb_id}_tleap.pdb",
+            "{pdb_id}_tleap.gro",
+            "topol.top",
+            "topol_without_posre.top",
+            "complex.gro",
             "em.gro",
             "nvt.gro",
             "nvt.xtc",
@@ -107,6 +125,7 @@ class MDAgent(BaseAgent):
             "temperature.xvg",
             "pressure.xvg",
             "density.xvg",
+            "equilibration_checks.json",
             "potential.xvg",
             "md.gro",
             "md.xtc",
@@ -128,7 +147,11 @@ class MDAgent(BaseAgent):
             self.logger.error(f"{tool_call}")
             return False
 
-        if tool_name in ("run_tleap", "run_tleap_ligand", "param_ligand"):
+        if tool_name == "gromacs_equil" and tool_call.startswith("Equilibration failed"):
+            self.logger.error(f"{tool_call}")
+            return False
+
+        if tool_name in ("run_tleap_protein", "run_tleap_ligand", "param_ligand"):
             if "tleap run failed with error:" in tool_call:
                 self.logger.error(f"{tool_call}")
                 return False
@@ -140,6 +163,18 @@ class MDAgent(BaseAgent):
             if "ParmEd failed:" in tool_call:
                 self.logger.error(f"{tool_call}")
                 return False
+
+        if tool_name == "prepare_pdb_file_ligand" and "Ligand protonation failed with error:" in tool_call:
+            self.logger.error(f"{tool_call}")
+            return False
+
+        if tool_name == "set_ligand_protonation" and "Ligand protonation change refused:" in tool_call:
+            self.logger.error(f"{tool_call}")
+            return False
+
+        if tool_name == "protonate_protein" and "PDB2PQR failed with error:" in tool_call:
+            self.logger.error(f"{tool_call}")
+            return False
 
         return True
 
@@ -375,7 +410,7 @@ class MDAgent(BaseAgent):
             raise
 
     def setup_tools(self):
-        self.tool_schemas = tool_schema.create_tool_schema_md(self.sandbox_dir, self.ligand_name, self.pdb_id)
+        self.tool_schemas = tool_schema.create_tool_schema_md(self.sandbox_dir, self.ligand_name, self.pdb_id, self.ph)
 
     def run(self):
         self._reset_pipeline()

@@ -33,6 +33,32 @@ else
 	LIGGRO=""
 fi
 
+#------- FILES BACKUPS AND CLEANUPS ----
+cp topol.top topol_before_equil.top && echo "Copied topol.top to topol_before_equil.top" >> $LOG_FILE 2>&1
+cp index.ndx index_before_equil.ndx && echo "Copied index.ndx to index_before_equil.ndx" >> $LOG_FILE 2>&1
+sed -i 's/WAT/SOL/g' topol.top >> $LOG_FILE 2>&1
+
+rm solv.gro solv_ions.gro em.gro nvt.gro npt.gro
+
+# NaCl concentration (M) added on top of the neutralizing counter-ions, set by gromacs_equil
+# (0.15 = physiological environment, 0 = counter-ions only)
+IONIC_CONC="${IONIC_CONC:-0.15}"
+echo "Ionic concentration: $IONIC_CONC M NaCl" >> $LOG_FILE 2>&1
+
+#------- SOLVATE and BOX ---------------
+if ! [ -f solv.gro ]; then
+    gmx editconf -f $INPUT_GRO -o newbox.gro -bt cubic -c -d 1.0 >> $LOG_FILE 2>&1
+    sed -i 's/WAT/SOL/g' newbox.gro >> $LOG_FILE 2>&1
+    gmx solvate -cp newbox.gro -cs spc216.gro -p topol.top -o solv.gro >> $LOG_FILE 2>&1
+    sed -i 's/OW/ O/g' solv.gro >> $LOG_FILE 2>&1
+    sed -i 's/HW/ H/g' solv.gro >> $LOG_FILE 2>&1
+fi
+
+if ! [ -f solv_ions.gro ]; then
+    gmx grompp -f ions.mdp -c solv.gro -p topol.top -o ions.tpr >> $LOG_FILE 2>&1
+    echo "SOL" | gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname Na -nname Cl -neutral -conc $IONIC_CONC >> $LOG_FILE 2>&1
+fi
+
 #------- ENERGY MINIMISATION ------------
 if ! [ -f em.gro ]; then
 	$GMX grompp -f em.mdp -c $INPUT_GRO -p topol.top -o em.tpr >> $LOG_FILE 2>&1
@@ -350,14 +376,5 @@ else
 fi
 
 #--------------- NPT --------------------
-$GMX grompp -f npt.mdp -c nvt.gro -t nvt.cpt -r nvt.gro -p topol.top -o npt.tpr -n index.ndx -maxwarn 2 >> $LOG_FILE 2>&1
-$GMX mdrun -v -deffnm npt >> $LOG_FILE 2>&1
-
-if [ -f npt.gro ]; then
-	echo "'npt.gro' created" >> $LOG_FILE 2>&1
-	echo -e "Pressure \n 0" | $GMX energy -f npt.edr -o pressure.xvg >> $LOG_FILE 2>&1
-	echo -e "Density \n 0" | $GMX energy -f npt.edr -o density.xvg >> $LOG_FILE 2>&1
-else
-	echo "Error: Failed to create 'npt.gro'" >> $LOG_FILE 2>&1
-	exit 1
-fi
+# NPT is run by gromacs_equil (gromacs_tools.py) after the NVT temperature check,
+# so that NVT can be extended first if the temperature has not reached its reference.

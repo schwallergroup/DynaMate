@@ -1,8 +1,11 @@
+import os
 import subprocess
 from pathlib import Path
 import re
 import shutil
 import sys
+import json
+import numpy as np
 from src import constants
 from src.utils import get_class_logger
 from collections import defaultdict, Counter
@@ -25,10 +28,103 @@ def _filter_mdrun_output(output: str) -> str:
     
     return output
 
-    
+
+# -------------- Equilibration checks --------------
+
+def _gmx_executable() -> str:
+    for exe in ("gmx", "gmx_mpi", "gmx_d"):
+        if shutil.which(exe):
+            return exe
+    return "gmx"
 
 
-def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_files=None) -> str:
+def _run_gmx(sandbox_dir: str, args: list[str], log_file: Path, stdin: str | None = None) -> int:
+    """Runs a GROMACS command in sandbox_dir, appending its output to log_file. Returns the return code."""
+    with open(log_file, "a") as log:
+        result = subprocess.run([_gmx_executable(), *args], cwd=sandbox_dir, input=stdin, stdout=log, stderr=subprocess.STDOUT, text=True)
+    return result.returncode
+
+
+def read_xvg(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
+    """Time (ps) and first data column of a GROMACS .xvg file."""
+    rows = []
+    for line in Path(path).read_text().splitlines():
+        if line.strip() and not line.startswith(("#", "@")):
+            rows.append([float(x) for x in line.split()[:2]])
+    data = np.array(rows).reshape(-1, 2)
+    return data[:, 0], data[:, 1]
+
+
+def _second_half(path: str | Path, quantity: str) -> dict:
+    """Values of the second half of the run (the first half is still relaxing), or an error if the file is missing or too short."""
+    path = Path(path)
+    if not path.exists() or path.stat().st_size == 0:
+        return {"produced": False, "passed": False, "detail": f"{path.name} was not produced: the {quantity} cannot be checked."}
+    time, values = read_xvg(path)
+    if len(time) < 4:
+        return {"produced": True, "passed": False, "detail": f"{path.name} has only {len(time)} points: the {quantity} cannot be checked."}
+    mask = time >= time[0] + (time[-1] - time[0]) / 2
+    return {"produced": True, "time": time[mask], "values": values[mask], "window_ps": [float(time[mask][0]), float(time[-1])]}
+
+
+def check_nvt_temperature(xvg: str | Path, ref_t: float) -> dict:
+    """NVT passes if the mean temperature over the second half is within NVT_TEMP_TOLERANCE_K of the reference."""
+    half = _second_half(xvg, "temperature")
+    if "values" not in half:
+        return half
+    mean, std = float(np.mean(half["values"])), float(np.std(half["values"]))
+    passed = abs(mean - ref_t) <= constants.NVT_TEMP_TOLERANCE_K
+    return {"produced": True, "passed": passed, "mean": round(mean, 2), "std": round(std, 2), "window_ps": half["window_ps"],
+            "detail": f"T = {mean:.1f} ± {std:.1f} K over {half['window_ps'][0]:.0f}-{half['window_ps'][1]:.0f} ps, reference {ref_t:.1f} K "
+                      f"(tolerance ±{constants.NVT_TEMP_TOLERANCE_K} K): {'passed' if passed else 'not reached'}"}
+
+
+def check_npt_pressure(xvg: str | Path, ref_p: float = constants.REF_PRESSURE_BAR) -> dict:
+    """NPT pressure passes if the reference pressure is within one standard deviation of the mean over the second half."""
+    half = _second_half(xvg, "pressure")
+    if "values" not in half:
+        return half
+    mean, std = float(np.mean(half["values"])), float(np.std(half["values"]))
+    passed = abs(mean - ref_p) <= std
+    return {"produced": True, "passed": passed, "mean": round(mean, 2), "std": round(std, 2), "window_ps": half["window_ps"],
+            "detail": f"P = {mean:.1f} ± {std:.1f} bar over {half['window_ps'][0]:.0f}-{half['window_ps'][1]:.0f} ps, reference {ref_p:.1f} bar "
+                      f"(reference within one standard deviation): {'passed' if passed else 'not reached'}"}
+
+
+def check_npt_density(xvg: str | Path) -> dict:
+    """
+    NPT density passes if it has stabilized: mean over the second half within DENSITY_RANGE_KG_M3 (protein + ions + water,
+    so no exact match with pure water is expected) and linear drift over that window below DENSITY_MAX_DRIFT_KG_M3.
+    """
+    half = _second_half(xvg, "density")
+    if "values" not in half:
+        return half
+    mean, std = float(np.mean(half["values"])), float(np.std(half["values"]))
+    slope = float(np.polyfit(half["time"], half["values"], 1)[0])
+    drift = slope * (half["window_ps"][1] - half["window_ps"][0])
+    low, high = constants.DENSITY_RANGE_KG_M3
+    in_range = low <= mean <= high
+    stable = abs(drift) <= constants.DENSITY_MAX_DRIFT_KG_M3
+    passed = in_range and stable
+    reasons = [] if passed else [r for r, ok in ((f"outside {low:.0f}-{high:.0f} kg/m3", in_range), ("still drifting", stable)) if not ok]
+    return {"produced": True, "passed": passed, "mean": round(mean, 2), "std": round(std, 2), "drift": round(drift, 2), "window_ps": half["window_ps"],
+            "detail": f"density = {mean:.1f} ± {std:.1f} kg/m3, drift {drift:+.1f} kg/m3 over {half['window_ps'][0]:.0f}-{half['window_ps'][1]:.0f} ps "
+                      f"(range {low:.0f}-{high:.0f}, max drift ±{constants.DENSITY_MAX_DRIFT_KG_M3:.0f}): {'stabilized' if passed else ', '.join(reasons)}"}
+
+
+def _extend_stage(sandbox_dir: str, stage: str, log_file: Path) -> bool:
+    """Extends a finished stage (nvt or npt) by EQUIL_EXTENSION_PS, continuing from its checkpoint (appends to its .edr/.xtc/.log)."""
+    logger.info(f"Extending {stage} by {constants.EQUIL_EXTENSION_PS} ps")
+    if _run_gmx(sandbox_dir, ["convert-tpr", "-s", f"{stage}.tpr", "-extend", str(constants.EQUIL_EXTENSION_PS), "-o", f"{stage}.tpr"], log_file) != 0:
+        return False
+    return _run_gmx(sandbox_dir, ["mdrun", "-v", "-deffnm", stage, "-cpi", f"{stage}.cpt"], log_file) == 0
+
+
+def _write_energy(sandbox_dir: str, edr: str, term: str, xvg: str, log_file: Path) -> None:
+    _run_gmx(sandbox_dir, ["energy", "-f", edr, "-o", xvg], log_file, stdin=f"{term}\n0\n")
+
+
+def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=None, ligand_files=None, test: bool = False, ionic_conc: float = 0.15) -> str:
     # sometimes llm passes ligands as empty strings or the string "None"
     if not ligand_name or str(ligand_name).strip().lower() == "none":
         ligand_name = None
@@ -37,153 +133,11 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
     else:
         ligand_file=ligand_files[0]
 
-    # Helper functions
-    def _make_posre_block(posre_file: str) -> str:
-        return (
-            f'; Include Position restraint file\n'
-            f'#ifdef POSRES\n'
-            f'#include "{posre_file}"\n'
-            f'#endif\n\n'
-        )
-
-    def _parse_protein_mol_types(text: str) -> list[str]:
-        """
-        Parse the [ molecules ] section and return unique protein molecule type
-        names (system*) in first-seen order.
-
-        Handles both formats:
-            system1    2          ← two identical chains of type system1
-            system1    1          ← followed later by another system1 entry
-            system2    1
-        """
-        in_molecules = False
-        seen: dict[str, None] = {}   # ordered set (insertion-ordered dict)
-
-        for line in text.splitlines():
-            stripped = line.strip()
-
-            # Detect section header
-            if re.match(r'^\[\s*molecules\s*\]', stripped, re.I):
-                in_molecules = True
-                continue
-
-            # Stop at next section header
-            if in_molecules and re.match(r'^\[', stripped):
-                break
-
-            # Skip blanks and comments
-            if not stripped or stripped.startswith(';'):
-                continue
-
-            if in_molecules:
-                parts = stripped.split()
-                if len(parts) >= 2 and re.match(r'^system\d*$', parts[0], re.I):
-                    mol = parts[0]
-                    if mol not in seen:
-                        seen[mol] = None
-
-        return list(seen.keys())
-    
-    # Modify topol.top to include position restraints
-    sandbox_dir = Path(sandbox_dir)
-    input_path  = sandbox_dir / "topol.top"
-    backup_path = sandbox_dir / "topol_without_posre.top"
- 
-    if not input_path.exists():
-        raise FileNotFoundError(f"{input_path} not found.")
- 
-    # Normalise ligand_name
-    _skip_ligand = {"None", "XXX", "None_h", None, ""}
-    handle_ligand = ligand_name not in _skip_ligand
- 
-    # Backup
-    shutil.copyfile(input_path, backup_path)
-    logger.info(f"Backup created: {backup_path}")
- 
-    text = input_path.read_text(encoding="utf-8", errors="replace")
- 
-    # ── 1. Discover protein molecule types from [ molecules ] ─────────────────
-    protein_mol_types: list[str] = _parse_protein_mol_types(text)
-    logger.info(f"Protein molecule types found in [ molecules ]: {protein_mol_types}")
- 
-    if not protein_mol_types:
-        logger.warning("No protein chain entries (system*) found in [ molecules ]. "
-                       "No position restraints inserted.")
-        return
- 
-    # ── 2. Find the extent of [ moleculetype ] sections ──────────────────────
-    # Everything from the first [ moleculetype ] up to [ system ] / [ molecules ]
-    next_non_mol = re.search(
-        r'^\[\s*(system|molecules)\s*\]', text, flags=re.I | re.M
-    )
-    end_of_moltypes = next_non_mol.start() if next_non_mol else len(text)
- 
-    header_re = re.compile(r'^\[\s*moleculetype\s*\]', flags=re.I | re.M)
-    headers   = [m for m in header_re.finditer(text) if m.start() < end_of_moltypes]
- 
-    if not headers:
-        logger.warning("No [ moleculetype ] sections found. No changes made.")
-        return
- 
-    positions = [m.start() for m in headers] + [end_of_moltypes]
-    preamble  = text[: positions[0]]
- 
-    # ── 3. Walk each [ moleculetype ] block and insert POSRES if needed ───────
-    segments: list[str]    = []
-    inserted_protein: set  = set()   # unique types already given a posre block
-    inserted_ligand        = False
-    report: list[str]      = []
- 
-    for i in range(len(positions) - 1):
-        seg = text[positions[i] : positions[i + 1]]
- 
-        # Extract molecule name from the "<name>  <nrexcl>" line that follows
-        # the [ moleculetype ] header.
-        name_match = re.search(
-            r'^\[\s*moleculetype\s*\][^\[]*?^\s*(\S+)\s+\d+',
-            seg, flags=re.I | re.M | re.S
-        )
-        mol_name = name_match.group(1) if name_match else None
- 
-        # ── Protein chain ──────────────────────────────────────────────────
-        if mol_name and mol_name in protein_mol_types:
-            if mol_name not in inserted_protein:
-                posre_file  = f"posre_{mol_name}.itp"
-                posre_block = _make_posre_block(posre_file)
-                if posre_block not in seg:
-                    seg = seg.rstrip() + "\n\n" + posre_block
-                    report.append(mol_name)
-                inserted_protein.add(mol_name)
-            else:
-                # Duplicate moleculetype block for the same type — do NOT
-                # insert another include; GROMACS applies posre per molecule
-                # type, not per block.
-                logger.debug(
-                    f"Skipping duplicate [ moleculetype ] block for {mol_name}"
-                )
- 
-        # ── Ligand ────────────────────────────────────────────────────────
-        if handle_ligand and not inserted_ligand and mol_name == ligand_name:
-            posre_block = _make_posre_block(f"posre_{ligand_name}.itp")
-            if posre_block not in seg:
-                seg = seg.rstrip() + "\n\n" + posre_block
-                report.append(ligand_name)
-            inserted_ligand = True
- 
-        segments.append(seg)
- 
-    # ── 4. Reassemble and write ───────────────────────────────────────────────
-    modified_text = preamble + "".join(segments) + text[end_of_moltypes:]
-    input_path.write_text(modified_text, encoding="utf-8")
- 
-    logger.info(
-        f"Position restraint includes added for: {', '.join(report) or 'none'}"
-    )
-    if handle_ligand and not inserted_ligand:
-        logger.warning(
-            f"Ligand '{ligand_name}' was specified but no matching "
-            f"[ moleculetype ] block was found — posre include NOT inserted."
-        )
+    # NVT and NPT length: 100 ps, or 10 ps in test mode (no extension)
+    equil_nvt_ps = constants.EQUIL_TEST_TIME_PS if test else constants.EQUIL_TIME_NVT_PS
+    equil_npt_ps = constants.EQUIL_TEST_TIME_PS if test else constants.EQUIL_TIME_NPT_PS
+    equil_nvt_nsteps = int(equil_nvt_ps / 0.002)  # 2 fs per step
+    equil_npt_nsteps = int(equil_npt_ps / 0.002)  # 2 fs per step
 
     # -------------- Create em.mdp, nvt.mdp, npt.mdp files --------------
 
@@ -218,7 +172,7 @@ DispCorr        = no
 define                  = -DPOSRES  ; position restrain the protein and ligand
 ; Run parameters
 integrator              = md        ; leap-frog integrator
-nsteps                  = 5000     ; 2 * 5000 = 10 ps
+nsteps                  = {equil_nvt_nsteps}     ; 2 fs * {equil_nvt_nsteps} = {equil_nvt_ps} ps
 dt                      = 0.002     ; 2 fs
 ; Output control
 nstenergy               = 500       ; save energies every 1.0 ps
@@ -267,7 +221,7 @@ gen_seed                = -1        ; generate a random seed
 define                  = -DPOSRES  ; position restrain the protein and ligand
 ; Run parameters
 integrator              = md        ; leap-frog integrator
-nsteps                  = 5000     ; 2 * 5000 = 10 ps
+nsteps                  = {equil_npt_nsteps}     ; 2 fs * {equil_npt_nsteps} = {equil_npt_ps} ps
 dt                      = 0.002     ; 2 fs
 ; Output control
 nstenergy               = 500       ; save energies every 1.0 ps
@@ -299,7 +253,7 @@ tc-grps                 = Protein Water_and_ions    ; two coupling groups - more
 tau_t                   = 0.1   0.1                     ; time constant, in ps
 ref_t                   = {float(md_temp)}   {float(md_temp)}                     ; reference temperature, one for each group, in K
 ; Pressure coupling
-pcoupl                  = Berendsen                     ; pressure coupling is on for NPT
+pcoupl                  = C-rescale                     ; pressure coupling is on for NPT
 pcoupltype              = isotropic                     ; uniform scaling of box vectors
 tau_p                   = 2.0                           ; time constant, in ps
 ref_p                   = 1.0                           ; reference pressure, in bar
@@ -313,6 +267,13 @@ DispCorr                = no
 gen_vel                 = no        ; velocity generation off after NVT 
 ''')
     npt_mdp_infile.close()
+
+    # if there are backups copy them to the original file
+    
+    if os.path.exists(f"{sandbox_dir}/topol_before_equil.top"):
+        shutil.copy(f"{sandbox_dir}/topol_before_equil.top", f"{sandbox_dir}/topol.top")
+    if os.path.exists(f"{sandbox_dir}/index_before_equil.ndx"):
+        shutil.copy(f"{sandbox_dir}/index_before_equil.ndx", f"{sandbox_dir}/index.ndx")
 
     # -------------- Run equil_Gromacs.sh script --------------
 
@@ -333,25 +294,89 @@ gen_vel                 = no        ; velocity generation off after NVT
         cmd.append(ligand_gro)
         print(cmd)  
 
-    result = subprocess.run(cmd, cwd=sandbox_dir, stdout=sys.stdout, stderr=sys.stderr, text=True)
+    # equil_Gromacs.sh: solvation, ions (counter-ions + ionic_conc M NaCl), energy minimization and NVT
+    env = {**os.environ, "IONIC_CONC": str(float(ionic_conc))}
+    result = subprocess.run(cmd, cwd=sandbox_dir, stdout=sys.stdout, stderr=sys.stderr, text=True, env=env)
 
-    gromacs_output = ""
-
-    if log_file_path.exists():
+    def read_log() -> str:
+        if not log_file_path.exists():
+            return ""
         try:
-            gromacs_output = _filter_mdrun_output(log_file_path.read_text(encoding="utf-8"))
+            return _filter_mdrun_output(log_file_path.read_text(encoding="utf-8"))
         except Exception as e:
-            gromacs_output = f"Could not read GROMACS log file: {e}"
+            return f"Could not read GROMACS log file: {e}"
 
     if result.returncode != 0:
         return (f"Equilibration script failed with return code {result.returncode}.\n"
                 f"--- Full GROMACS Log ---\n"
-                f"{gromacs_output}\n"
+                f"{read_log()}\n"
                 f"--- Shell Script Stderr ---\n"
                 f"{result.stderr or 'None captured directly'}")
+
+    report = {"test": test, "ionic_conc_m": float(ionic_conc), "equil_nvt_ps": equil_nvt_ps, "equil_npt_ps": equil_npt_ps, "md_temp": float(md_temp)}
+
+    # -------------- NVT check: temperature reached, otherwise extend NVT --------------
+    nvt = check_nvt_temperature(f"{sandbox_dir}/temperature.xvg", float(md_temp))
+    nvt_extensions = 0
+    while nvt["produced"] and not nvt["passed"] and not test and nvt_extensions < constants.MAX_NVT_EXTENSIONS:
+        if not _extend_stage(sandbox_dir, "nvt", log_file_path):
+            return f"Equilibration failed: the NVT extension did not run.\n--- Full GROMACS Log ---\n{read_log()}"
+        nvt_extensions += 1
+        _write_energy(sandbox_dir, "nvt.edr", "Temperature", "temperature.xvg", log_file_path)
+        nvt = check_nvt_temperature(f"{sandbox_dir}/temperature.xvg", float(md_temp))
+    if not nvt["produced"]:
+        return f"Equilibration failed: {nvt['detail']}\n--- Full GROMACS Log ---\n{read_log()}"
+    report["nvt"] = {**nvt, "extensions": nvt_extensions, "length_ps": equil_nvt_ps + nvt_extensions * constants.EQUIL_EXTENSION_PS}
+    logger.info(f"NVT check: {nvt['detail']} ({nvt_extensions} extension(s))")
+
+    # -------------- NPT --------------
+    npt_cmds = [
+        ["grompp", "-f", "npt.mdp", "-c", "nvt.gro", "-t", "nvt.cpt", "-r", "nvt.gro", "-p", "topol.top", "-o", "npt.tpr", "-n", "index.ndx", "-maxwarn", "2"],
+        ["mdrun", "-v", "-deffnm", "npt"],
+    ]
+    for args in npt_cmds:
+        if _run_gmx(sandbox_dir, args, log_file_path) != 0 or (args[0] == "mdrun" and not Path(f"{sandbox_dir}/npt.gro").exists()):
+            return f"Equilibration failed: NPT step 'gmx {args[0]}' did not complete.\n--- Full GROMACS Log ---\n{read_log()}"
+
+    # -------------- NPT checks: pressure around 1 bar and stabilized density, otherwise extend NPT --------------
+    def check_npt():
+        _write_energy(sandbox_dir, "npt.edr", "Pressure", "pressure.xvg", log_file_path)
+        _write_energy(sandbox_dir, "npt.edr", "Density", "density.xvg", log_file_path)
+        return check_npt_pressure(f"{sandbox_dir}/pressure.xvg"), check_npt_density(f"{sandbox_dir}/density.xvg")
+
+    pressure, density = check_npt()
+    npt_extensions = 0
+    while (pressure["produced"] and density["produced"] and not (pressure["passed"] and density["passed"])
+           and not test and npt_extensions < constants.MAX_NPT_EXTENSIONS):
+        if not _extend_stage(sandbox_dir, "npt", log_file_path):
+            return f"Equilibration failed: the NPT extension did not run.\n--- Full GROMACS Log ---\n{read_log()}"
+        npt_extensions += 1
+        pressure, density = check_npt()
+    if not (pressure["produced"] and density["produced"]):
+        return f"Equilibration failed: {pressure['detail'] if not pressure['produced'] else density['detail']}\n--- Full GROMACS Log ---\n{read_log()}"
+    report["npt"] = {"pressure": pressure, "density": density, "extensions": npt_extensions,
+                     "length_ps": equil_npt_ps + npt_extensions * constants.EQUIL_EXTENSION_PS}
+    logger.info(f"NPT checks: {pressure['detail']}; {density['detail']} ({npt_extensions} extension(s))")
+
+    passed = nvt["passed"] and pressure["passed"] and density["passed"]
+    report["passed"] = passed
+    Path(f"{sandbox_dir}/equilibration_checks.json").write_text(json.dumps(report, indent=2))
+
+    summary = (
+        f"Ions: system neutralized with Na+/Cl- counter-ions" + (f" and {float(ionic_conc)} M NaCl added.\n" if float(ionic_conc) > 0 else ", no added salt.\n") +
+        f"NVT ({report['nvt']['length_ps']} ps, {nvt_extensions} extension(s)): {nvt['detail']}\n"
+        f"NPT ({report['npt']['length_ps']} ps, {npt_extensions} extension(s)): {pressure['detail']}; {density['detail']}\n"
+        f"Details saved to {sandbox_dir}/equilibration_checks.json."
+    )
+    if test:
+        header = (f"Equilibration ran in TEST mode: NVT and NPT kept at {equil_nvt_ps} ps without extension. "
+                  "The checks below are reported for information only and do not demonstrate equilibration.")
+    elif passed:
+        header = "Equilibration ran successfully and passed the temperature, pressure and density checks."
     else:
-        return (f"Equilibration ran successfully. Full GROMACS output:\n"
-                f"{gromacs_output}")
+        header = ("WARNING: equilibration ran but did NOT pass all checks after the maximum number of extensions. "
+                  "Report this to the user before relying on the production run; a longer equilibration may be needed.")
+    return f"{header}\n{summary}\nFull GROMACS output:\n{read_log()}"
 
 
 def gromacs_production(sandbox_dir: str, input_gro: str, npt_cpt_file: str, md_temp: str, md_duration: str, ligand_name=None) -> str:

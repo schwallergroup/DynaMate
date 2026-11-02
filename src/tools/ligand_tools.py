@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess, shlex
 import re
 from src.utils import get_class_logger
+from src.tools.ligand_protonation import check_ligand_consistency, load_record
 
 logger = get_class_logger(__name__, log_to_file=False)
 
@@ -78,92 +79,32 @@ def param_ligand(sandbox_dir: str, ligand_files: str | list[str], ligand_name: s
     logger.info(f"Parameterizing ligand file: {ligand_file}")
     ligand_stem=Path(f"{ligand_file}").stem
 
-    # Find charge of ligand from structure
-    charges = []
+    # The ligand files must describe the selected protonation state (not edited outside set_ligand_protonation)
+    problems = check_ligand_consistency(sandbox_dir, ligand_stem)
+    if problems:
+        return "Ligand parameterization failed with error: consistency check failed: " + "; ".join(problems)
 
-    tmp_mol2file = f"{sandbox_dir}/{ligand_stem}.mol2"
-    # Create temporary mol2 file using obabel
-    cmd = shlex.split(f"obabel {sandbox_dir}/{ligand_file} -O {tmp_mol2file}")
-    run_1 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
-    if run_1.returncode != 0:
-        error_text = "\n".join(filter(None, [run_1.stderr, run_1.stdout]))
-        return f"Ligand parameterization failed with error: {error_text}"
-
-    # Read the mol2 file to find the charge
-    in_atom_section = False
-
-    with open(tmp_mol2file, "r") as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith("@<TRIPOS>ATOM"):
-                in_atom_section = True
-                continue
-            elif line.startswith("@<TRIPOS>") and in_atom_section:
-                break
-            elif in_atom_section and line:
-                try:
-                    charge = float(line.split()[-1])
-                    charges.append(charge)
-                except ValueError:
-                    pass  # skip malformed lines
-    total_charge = sum(charges)
-    charge_ligand = round(total_charge)
-
-    # Clean up temporary mol2 file
-    Path(tmp_mol2file).unlink(missing_ok=True)
-
+    # Net charge of the selected protonation state (= sum of the formal charges in {ligand_stem}.sdf, checked above)
+    charge_ligand = load_record(sandbox_dir, ligand_stem)["selected"]["net_charge"]
     logger.info(f"Charge of ligand {ligand_stem} determined to be {charge_ligand}")
 
-    # Create mol2 file using antechamber
+    # Create mol2 file using antechamber, from the .sdf so that bond orders and formal charges are not re-perceived
     cmd = shlex.split(
-        f"antechamber -i {sandbox_dir}/{ligand_file} -fi pdb -o {sandbox_dir}/{ligand_stem}.mol2 -fo mol2 -c bcc -nc {charge_ligand} -s 2"
+        f"antechamber -i {sandbox_dir}/{ligand_stem}.sdf -fi mdl -o {sandbox_dir}/{ligand_stem}.mol2 -fo mol2 -c bcc -nc {charge_ligand} -at gaff2 -rn {ligand_name} -s 2"
     )
     run_2 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
-    if run_2.returncode != 0:
+    if run_2.returncode != 0 or not Path(f"{sandbox_dir}/{ligand_stem}.mol2").exists():
         error_text = "\n".join(filter(None, [run_2.stderr, run_2.stdout]))
+        logger.error(f"Ligand parameterization failed with error: {error_text}")
         return f"Ligand parameterization failed with error: {error_text}"
 
     logger.info(f"Mol2 file for ligand {ligand_stem} created")
 
-    cmd = shlex.split(f"sed -i 's/UNL/{ligand_name}/g' {sandbox_dir}/{ligand_stem}.mol2")
-    run_3_UNL = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
-    if run_3_UNL.returncode != 0:
-        error_text = "\n".join(filter(None, [run_3_UNL.stderr, run_3_UNL.stdout]))
-        return f"Ligand parameterization failed with error: {error_text}"
-    
-    cmd = shlex.split(f"sed -i 's/UNK/{ligand_name}/g' {sandbox_dir}/{ligand_stem}.mol2")
-    run_3_UNK = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
-    if run_3_UNK.returncode != 0:
-        error_text = "\n".join(filter(None, [run_3_UNK.stderr, run_3_UNK.stdout]))
-        return f"Ligand parameterization failed with error: {error_text}"
-
-    # Create prepi file using antechamber
-    cmd = shlex.split(
-        f"antechamber -i {sandbox_dir}/{ligand_stem}.mol2 -fi mol2 -o {sandbox_dir}/{ligand_stem}.prepi -fo prepi -c bcc"
-    )
-    run_4 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
-    if run_4.returncode != 0:
-        error_text = "\n".join(filter(None, [run_4.stderr, run_4.stdout]))
-        return f"Ligand parameterization failed with error: {error_text}"
-    logger.info(f"Prepi file for ligand {ligand_file} created: {ligand_stem}.prepi")
-
-    # Create frcmod file using parmchk2
-    cmd = shlex.split(f"parmchk2 -i {sandbox_dir}/{ligand_stem}.mol2 -f mol2 -o {sandbox_dir}/{ligand_stem}.frcmod")
-    run_5 = subprocess.run(cmd, cwd=sandbox_dir, capture_output=True, text=True)
-    if run_5.returncode != 0:
-        error_text = "\n".join(filter(None, [run_5.stderr, run_5.stdout]))
-        return f"Ligand parameterization failed with error: {error_text}"
-    logger.info(f"Frcmod file for ligand {ligand_file} created: {ligand_stem}.frcmod")
-
-    # Update charge prepi file
-    fix_charges(f"{sandbox_dir}/{ligand_stem}.prepi", f"{sandbox_dir}/{ligand_stem}_fixed.prepi")
-
-    if Path(f"{sandbox_dir}/{ligand_stem}_fixed.prepi").exists():
-        prepi_file = f"{ligand_stem}_fixed.prepi"
-    else:
-        prepi_file = f"{ligand_stem}.prepi"
+    # Check: same atoms as the .sdf and AM1-BCC partial charges adding up to the net charge
+    problems = check_ligand_consistency(sandbox_dir, ligand_stem, mol2_file=f"{ligand_stem}.mol2")
+    if problems:
+        return "Ligand parameterization failed with error: consistency check failed: " + "; ".join(problems)
 
     if len(ligand_files) == 1:
-        return f"Ligand parameterisation complete. Parameters saved to {sandbox_dir}/{prepi_file} and {sandbox_dir}/{ligand_stem}.frcmod"
-    if len(ligand_files) > 1:
-        return f"Ligand parameterisation complete for the the first ligand: {ligand_files[0]}. Parameters saved to {sandbox_dir}/{ligand_stem}.frcmod and {sandbox_dir}/{prepi_file}"
+        return f"mol2 file created for the ligand: {ligand_files[0]} (net charge {charge_ligand:+d}), saved to {sandbox_dir}/{ligand_stem}.mol2"
+    return f"mol2 file created for the first ligand: {ligand_files[0]} (net charge {charge_ligand:+d}), saved to {sandbox_dir}/{ligand_stem}.mol2"
