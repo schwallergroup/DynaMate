@@ -303,6 +303,42 @@ quit
     os.replace(f"{sandbox_dir}/{pdb_id}.top", f"{sandbox_dir}/topol.top")
     logger.info(f"ParmEd converted {prmtop_path} to {sandbox_dir}/topol.top and {sandbox_dir}/{pdb_id}_tleap.gro")
 
+    # Rename the crystal waters WAT -> SOL to match the GROMACS waters added by solvate
+    # The WAT [ moleculetype ] written by ParmEd is removed: the TIP3P SOL [ moleculetype ] is added below
+    with open(f"{sandbox_dir}/topol.top", "r") as f:
+        lines = f.readlines()
+    new_lines = []
+    in_wat_block = False
+    section = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("["):
+            section = stripped.strip("[] ").lower()
+            if section == "moleculetype":
+                # Name is on the first non-comment line after the header
+                name_line = next((l for l in lines[i + 1:] if l.strip() and not l.strip().startswith(";")), "")
+                in_wat_block = name_line.split()[0] == "WAT" if name_line.split() else False
+            elif section in ("system", "molecules"):
+                in_wat_block = False
+        if in_wat_block:
+            continue
+        if section == "molecules" and stripped.split()[:1] == ["WAT"]:
+            line = line.replace("WAT", "SOL", 1)
+        new_lines.append(line)
+    with open(f"{sandbox_dir}/topol.top", "w") as f:
+        f.writelines(new_lines)
+
+    with open(f"{sandbox_dir}/{pdb_id}_tleap.gro", "r") as f:
+        gro_lines = f.readlines()
+    n_wat = 0
+    for i in range(2, len(gro_lines) - 1):
+        if gro_lines[i][5:10].strip() == "WAT":
+            gro_lines[i] = gro_lines[i][:5] + "SOL  " + gro_lines[i][10:]
+            n_wat += 1
+    with open(f"{sandbox_dir}/{pdb_id}_tleap.gro", "w") as f:
+        f.writelines(gro_lines)
+    logger.info(f"{n_wat // 3} crystal waters renamed WAT -> SOL in topol.top and {pdb_id}_tleap.gro")
+
     # Edit the topology to add the posre blocks for the protein chains
 
     def _make_posre_block(posre_file: str) -> str:
@@ -535,8 +571,16 @@ quit
     if last_idx is None or moleculetype_idx is None:
         logger.error("No [ system ] or [ moleculetype ] found in topol.top — nothing inserted.")
     else:
+        # Do not redefine the atomtypes already written by ParmEd (OW and HW if there are crystal waters)
+        existing_atomtypes = {line.split()[0] for line in lines[:moleculetype_idx] if line.strip() and not line.strip().startswith((";", "[", "#"))}
+        atomstypes_to_insert = [line for line in atomstypes_to_insert if not line.strip() or line.split()[0] not in existing_atomtypes]
+
         if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
-            new_lines = lines[:moleculetype_idx-2] + atomstypes_to_insert + ligand_prm_lines_to_insert + lines[moleculetype_idx:last_idx] + ligand_top_lines_to_insert + lines_to_insert + lines[last_idx:] + last_ligand_line
+            # The ligand goes before the crystal waters in [ molecules ], same order as in complex.gro
+            system_lines = lines[last_idx:]
+            sol_idx = next((i for i, line in enumerate(system_lines) if line.split()[:1] == ["SOL"]), len(system_lines))
+            system_lines = system_lines[:sol_idx] + last_ligand_line + system_lines[sol_idx:]
+            new_lines = lines[:moleculetype_idx-2] + atomstypes_to_insert + ligand_prm_lines_to_insert + lines[moleculetype_idx:last_idx] + ligand_top_lines_to_insert + lines_to_insert + system_lines
         else:
             new_lines = lines[:moleculetype_idx-2] + atomstypes_to_insert + lines[moleculetype_idx:last_idx] + lines_to_insert + lines[last_idx:]
         with open(output, "w") as f:

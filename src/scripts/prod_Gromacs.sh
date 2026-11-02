@@ -22,7 +22,7 @@ fi
 
 # if no ions are present, update md.mdp such that Water_and_ions group is changed to Water only
 # if ligand, Protein Water becomes Protein_ligand Water
-if ! grep -q "Cl-" index.ndx && ! grep -q "Na+" index.ndx; then
+if ! grep -q "Cl" index.ndx && ! grep -q "Na" index.ndx; then
 	md_file="md.mdp"
     original="Protein Water_and_ions"
 	
@@ -48,7 +48,7 @@ else
 fi
 
 # if ions are present, but ligand exists, update md.mdp accordingly
-if grep -q "Cl-" index.ndx || grep -q "Na+" index.ndx; then
+if grep -q "Cl" index.ndx || grep -q "Na" index.ndx; then
     if [ -n "$LIGNAME" ]; then	
         md_file="md.mdp" 
 

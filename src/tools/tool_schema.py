@@ -157,8 +157,8 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id, ph):
             name="add_caps",
             description=(
                 "Add ACE and NME caps to the N- and C-termini of the protein chains, ONLY where the chain end is truncated "
-                f"(residues listed in the SEQRES records of {pdb_id}.pdb are missing before the first or after the last observed residue). "
-                "Real chain ends are left uncapped so that tleap treats them as charged termini. If the PDB file has no SEQRES records, no caps are added. "
+                f"(the first or last residues of the chain differ from the SEQRES records of {pdb_id}.pdb; terminal residues rebuilt by PDBFixer count as real ends). "
+                "Real chain ends are left uncapped so that tleap treats them as charged termini. Chains without SEQRES records (e.g. AlphaFold structures) are capped at both ends. "
                 "This tool should be run after prepare_pdb_file_ligand and before protonate_protein, for both protein-only and protein-ligand systems. "
                 f"The input PDB file should be named {pdb_id}_prepared.pdb and the output file will be named {pdb_id}_prepared_capped.pdb (written even if no cap is added)."
             ),
@@ -193,7 +193,8 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id, ph):
                 "Histidines are renamed to HID, HIE or HIP according to their protonation state, so rename_histidines is not needed. "
                 "This tool must be run after add_caps and before run_tleap_protein, for both protein-only and protein-ligand systems. "
                 f"The input PDB file should be named {pdb_id}_prepared_capped.pdb. The output files are {pdb_id}_pdb2pqr.pdb (the input of run_tleap_protein) "
-                f"and {pdb_id}_prepared_capped.pqr. You should check in the literature that the protonation states of key residues are appropriate at pH {ph}."
+                f"and {pdb_id}_prepared_capped.pqr. The crystal waters of {pdb_id}_fixed.pdb are added back at the end of {pdb_id}_pdb2pqr.pdb (oxygens only, tleap adds the hydrogens). "
+                f"You should check in the literature that the protonation states of key residues are appropriate at pH {ph}."
             ),
             parameters={
                 "type": "object",
@@ -388,6 +389,7 @@ def create_tool_schema_md(sandbox_dir, ligand_name, pdb_id, ph):
                 f"It must be run after protonate_protein: tleap loads the protonated protein {pdb_id}_pdb2pqr.pdb. "
                 f"tleap generates the Amber topology ({pdb_id}.prmtop), coordinates ({pdb_id}.inpcrd) and {pdb_id}_tleap.pdb. "
                 f"ParmEd is then used to convert these files to GROMACS format (topol.top, {pdb_id}_tleap.gro). "
+                "The crystal waters are renamed from WAT to SOL in topol.top and the .gro file, to match the GROMACS waters. "
                 "topol.top is then edited to add the position restraint includes for the protein chains, the water and ion parameters "
                 "and, if a ligand is given, the ligand parameters, topology and position restraint includes. "
                 f"For a protein-only system the output structure is {pdb_id}_tleap.gro. "

@@ -133,13 +133,40 @@ def gromacs_equil(sandbox_dir: str, input_gro: str, md_temp: str, ligand_name=No
     else:
         ligand_file=ligand_files[0]
 
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
+        protein_tcoupling = f"Protein_{ligand_name}"
+    else:
+        protein_tcoupling = "Protein"
+
     # NVT and NPT length: 100 ps, or 10 ps in test mode (no extension)
     equil_nvt_ps = constants.EQUIL_TEST_TIME_PS if test else constants.EQUIL_TIME_NVT_PS
     equil_npt_ps = constants.EQUIL_TEST_TIME_PS if test else constants.EQUIL_TIME_NPT_PS
     equil_nvt_nsteps = int(equil_nvt_ps / 0.002)  # 2 fs per step
     equil_npt_nsteps = int(equil_npt_ps / 0.002)  # 2 fs per step
 
-    # -------------- Create em.mdp, nvt.mdp, npt.mdp files --------------
+    # -------------- Create ions.mdp, em.mdp, nvt.mdp, npt.mdp files --------------
+
+    ions_mdp_infile = open(f'{sandbox_dir}/ions.mdp', 'w')
+    ions_mdp_infile.write(f'''; LINES STARTING WITH ';' ARE COMMENTS
+title		    = Minimization	; Title of run
+
+; Parameters describing what to do, when to stop and what to save
+integrator	    = steep		; Algorithm (steep = steepest descent minimization)
+emtol		    = 1000.0  	; Stop minimization when the maximum force < 10.0 kJ/mol
+emstep          = 0.01      ; Energy step size
+nsteps		    = 50000	  	; Maximum number of (minimization) steps to perform
+
+; Parameters describing how to find the neighbors of each atom and how to calculate the interactions
+nstlist		    = 1		    ; Frequency to update the neighbor list and long range forces
+cutoff-scheme   = Verlet
+ns_type		    = grid		; Method to determine neighbor list (simple, grid)
+rlist		    = 1.0		; Cut-off for making neighbor list (short range forces)
+coulombtype	    = cutoff	; Treatment of long range electrostatic interactions
+rcoulomb	    = 1.0		; long range electrostatic cut-off
+rvdw		    = 1.0		; long range Van der Waals cut-off
+pbc             = xyz 		; Periodic Boundary Conditions
+''')
+    ions_mdp_infile.close()
 
     em_mdp_infile = open(f'{sandbox_dir}/em.mdp', 'w' )
     em_mdp_infile.write(f'''; LINES STARTING WITH ';' ARE COMMENTS
@@ -200,7 +227,7 @@ pme_order               = 4         ; cubic interpolation
 fourierspacing          = 0.16      ; grid spacing for FFT
 ; Temperature coupling
 tcoupl                  = V-rescale                     ; modified Berendsen thermostat
-tc-grps                 = Protein Water_and_ions    ; two coupling groups - more accurate
+tc-grps                 = {protein_tcoupling} Water_and_ions    ; two coupling groups - more accurate
 tau_t                   = 0.1   0.1                     ; time constant, in ps
 ref_t                   = {float(md_temp)}   {float(md_temp)}                     ; reference temperature, one for each group, in K
 ; Pressure coupling
@@ -249,7 +276,7 @@ pme_order               = 4         ; cubic interpolation
 fourierspacing          = 0.16      ; grid spacing for FFT
 ; Temperature coupling
 tcoupl                  = V-rescale                     ; modified Berendsen thermostat
-tc-grps                 = Protein Water_and_ions    ; two coupling groups - more accurate
+tc-grps                 = {protein_tcoupling} Water_and_ions    ; two coupling groups - more accurate
 tau_t                   = 0.1   0.1                     ; time constant, in ps
 ref_t                   = {float(md_temp)}   {float(md_temp)}                     ; reference temperature, one for each group, in K
 ; Pressure coupling
@@ -280,7 +307,7 @@ gen_vel                 = no        ; velocity generation off after NVT
     script = constants.SCRIPTS_DIR / "equil_Gromacs.sh"
     log_file_path = Path(f"{sandbox_dir}/gromacs_equil.log")
 
-    cmd = [str(script), sandbox_dir, input_gro, log_file_path]
+    cmd = [str(script), sandbox_dir, input_gro, str(ionic_conc), log_file_path]
 
     if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
         obabel_cmd = f"obabel {ligand_file} -O {sandbox_dir}/{ligand_name}.gro"
@@ -295,8 +322,7 @@ gen_vel                 = no        ; velocity generation off after NVT
         print(cmd)  
 
     # equil_Gromacs.sh: solvation, ions (counter-ions + ionic_conc M NaCl), energy minimization and NVT
-    env = {**os.environ, "IONIC_CONC": str(float(ionic_conc))}
-    result = subprocess.run(cmd, cwd=sandbox_dir, stdout=sys.stdout, stderr=sys.stderr, text=True, env=env)
+    result = subprocess.run(cmd, cwd=sandbox_dir, stdout=sys.stdout, stderr=sys.stderr, text=True)
 
     def read_log() -> str:
         if not log_file_path.exists():
@@ -363,7 +389,7 @@ gen_vel                 = no        ; velocity generation off after NVT
     Path(f"{sandbox_dir}/equilibration_checks.json").write_text(json.dumps(report, indent=2))
 
     summary = (
-        f"Ions: system neutralized with Na+/Cl- counter-ions" + (f" and {float(ionic_conc)} M NaCl added.\n" if float(ionic_conc) > 0 else ", no added salt.\n") +
+        f"Ions: " + (f" {float(ionic_conc)} M NaCl added to have a neutral system.\n" if float(ionic_conc) > 0 else ", Na or Cl ions added to have a neutral system.\n") +
         f"NVT ({report['nvt']['length_ps']} ps, {nvt_extensions} extension(s)): {nvt['detail']}\n"
         f"NPT ({report['npt']['length_ps']} ps, {npt_extensions} extension(s)): {pressure['detail']}; {density['detail']}\n"
         f"Details saved to {sandbox_dir}/equilibration_checks.json."
@@ -385,6 +411,11 @@ def gromacs_production(sandbox_dir: str, input_gro: str, npt_cpt_file: str, md_t
     """
     if not ligand_name or str(ligand_name).strip().lower() == "none":
         ligand_name = None
+
+    if ligand_name is not None and ligand_name not in ["XXX", "None", "None_h"]:
+        protein_tcoupling = f"Protein_{ligand_name}"
+    else:
+        protein_tcoupling = "Protein"
 
     # ---------- Create md.mdp file --------------
     nsteps = int(((float(md_duration)) * 1000000) / 2)  # Convert ns to number of steps (2 fs per step)
@@ -422,7 +453,7 @@ pme_order               = 4         ; cubic interpolation
 fourierspacing          = 0.16      ; grid spacing for FFT
 ; Temperature coupling
 tcoupl                  = V-rescale                     ; modified Berendsen thermostat
-tc-grps                 = Protein Water_and_ions        ; two coupling groups - more accurate
+tc-grps                 = {protein_tcoupling} Water_and_ions        ; two coupling groups - more accurate
 tau_t                   = 0.1   0.1                     ; time constant, in ps
 ref_t                   = {float(md_temp)}   {float(md_temp)}                     ; reference temperature, one for each group, in K
 ; Pressure coupling 

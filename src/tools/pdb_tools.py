@@ -28,9 +28,9 @@ def fix_pdb_file(input_pdb: str, fixed_pdb: str) -> str:
     function should only be called when the input PDB file is known to have  issues, otherwise it may introduce new problems.
     Actions applied:
       - Removes heterogens (ligands, ions), keeps waters
-      - Finds missing residues (reports them but does not add)
+      - Finds missing residues (from the SEQRES records)
       - Finds missing atoms
-      - Adds missing heavy atoms (but no hydrogens)
+      - Adds missing residues (including missing terminal residues) and missing heavy atoms (but no hydrogens)
 
     Args:
         input_pdb (str): The path where the faulty PDB file is located.
@@ -47,11 +47,10 @@ def fix_pdb_file(input_pdb: str, fixed_pdb: str) -> str:
     fixer.findMissingResidues()
     fixer.findMissingAtoms()
 
-    # PDBFixer cannot auto-add missing residues; just reports them.
     if fixer.missingResidues:
-        logger.warning(f"Missing residues detected: {fixer.missingResidues}")
+        logger.warning(f"Missing residues detected, they are added by PDBFixer: {fixer.missingResidues}")
 
-    # Apply fixes (only adds missing atoms, no hydrogens)
+    # Apply fixes (adds missing residues and heavy atoms, no hydrogens)
     fixer.addMissingAtoms()
 
     # Save fixed PDB
@@ -236,39 +235,45 @@ def prepare_pdb_file_ligand(sandbox_dir: str, pdb_id: str, ph: float, ligand_nam
 
     return f"Successfully Prepared PDB structure without a ligand and saved the extracted PDB file to {sandbox_dir}/{pdb_id}_prepared.pdb. The protein is not protonated yet: run add_caps and then protonate_protein."
 
-def find_truncated_termini(pdb_file: str) -> dict[str, tuple[bool, bool]]:
+# Residue names that differ from the SEQRES name after preparation/protonation
+SEQRES_EQUIVALENT_RESNAMES = {"HID": "HIS", "HIE": "HIS", "HIP": "HIS", "HSD": "HIS", "HSE": "HIS", "HSP": "HIS",
+                              "CYX": "CYS", "CYM": "CYS", "ASH": "ASP", "GLH": "GLU", "LYN": "LYS", "MSE": "MET"}
+
+
+def find_truncated_termini(pdb_file: str, chains: dict[str, list[str]], n_compare: int = 3) -> dict[str, tuple[bool, bool]]:
     """
-    Finds which protein chain ends are truncated, i.e. have residues in the SEQRES records that are missing
-    before the first or after the last observed residue (found with PDBFixer).
-    Without SEQRES records no residues are reported missing, so every chain end is treated as a real terminus.
+    Finds which chain ends of a structure are truncated, by comparing the residues of each chain with the SEQRES
+    records of the original PDB file. A chain end is a real terminus if its first (last) n_compare residues are the
+    first (last) residues of the SEQRES sequence, e.g. when PDBFixer has rebuilt the missing terminal residues.
+    Chains without SEQRES records (e.g. AlphaFold or modelled structures) are treated as truncated at both ends.
 
     Args:
         pdb_file (str): Path of the original PDB file (with SEQRES records).
+        chains (dict): {chain_id: residue names of the chain in the structure to cap}.
+        n_compare (int): Number of terminal residues compared with the SEQRES sequence.
     Returns:
         {chain_id: (n_terminus_truncated, c_terminus_truncated)}
     """
-    fixer = PDBFixer(filename=pdb_file)
-    fixer.removeHeterogens(keepWater=False)
-    fixer.findMissingResidues()
+    seqres = {sequence.chainId: sequence.residues for sequence in PDBFixer(filename=pdb_file).sequences}
 
-    chains = list(fixer.topology.chains())
-    truncated = {chain.id: [False, False] for chain in chains}
-    for (chain_index, residue_index), missing in fixer.missingResidues.items():
-        chain = chains[chain_index]
-        n_residues = len(list(chain.residues()))
-        if n_residues == 0:
+    truncated = {}
+    for chain_id, resnames in chains.items():
+        if chain_id not in seqres:
+            logger.warning(f"Chain {chain_id}: no SEQRES record in {pdb_file}, the chain ends are treated as truncated and capped with ACE/NME")
+            truncated[chain_id] = (True, True)
             continue
-        if residue_index == 0:
-            truncated[chain.id][0] = True
-            logger.info(f"Chain {chain.id}: {len(missing)} residues missing before the N-terminus, it will be capped with ACE")
-        elif residue_index == n_residues:
-            truncated[chain.id][1] = True
-            logger.info(f"Chain {chain.id}: {len(missing)} residues missing after the C-terminus, it will be capped with NME")
-        else:
-            logger.warning(f"Chain {chain.id}: {len(missing)} residues ({'-'.join(missing)}) missing inside the chain, before residue index {residue_index}. "
-                           "This gap is not modelled and tleap will bond the residues on each side of the gap.")
+        observed = [SEQRES_EQUIVALENT_RESNAMES.get(name, name) for name in resnames]
+        reference = [SEQRES_EQUIVALENT_RESNAMES.get(name, name) for name in seqres[chain_id]]
+        n = min(n_compare, len(observed), len(reference))
+        n_truncated = observed[:n] != reference[:n]
+        c_truncated = observed[-n:] != reference[-n:]
+        if n_truncated:
+            logger.info(f"Chain {chain_id}: N-terminus {'-'.join(resnames[:n])} differs from the SEQRES start {'-'.join(seqres[chain_id][:n])}, it will be capped with ACE")
+        if c_truncated:
+            logger.info(f"Chain {chain_id}: C-terminus {'-'.join(resnames[-n:])} differs from the SEQRES end {'-'.join(seqres[chain_id][-n:])}, it will be capped with NME")
+        truncated[chain_id] = (n_truncated, c_truncated)
 
-    return {chain_id: tuple(ends) for chain_id, ends in truncated.items()}
+    return truncated
 
 
 def insert_ter_after_chain_ends(pdb_file: str) -> int:
@@ -337,11 +342,56 @@ def insert_ter_after_chain_ends(pdb_file: str) -> int:
     return n_ter
 
 
+def add_crystal_waters(water_source_pdb: str, pdb_file: str) -> int:
+    """
+    Appends the crystal waters (HOH oxygens) of water_source_pdb to the end of pdb_file, after the protein chains and
+    followed by a TER record. Waters are renumbered after the last residue (and atom) of pdb_file. Hydrogens are not
+    needed: tleap adds them from the TIP3P template. The file is overwritten.
+
+    Args:
+        water_source_pdb (str): PDB file containing the crystal waters (e.g. {pdb_id}_fixed.pdb, alternate locations resolved by PDBFixer).
+        pdb_file (str): PDB file to which the waters are added (e.g. {pdb_id}_pdb2pqr.pdb).
+    Returns:
+        Number of waters added.
+    """
+    with open(water_source_pdb, "r") as f:
+        water_lines = [line for line in f if line.startswith(("ATOM", "HETATM")) and line[17:20] == "HOH" and line[12:16].strip() == "O"]
+    if not water_lines:
+        return 0
+
+    with open(pdb_file, "r") as f:
+        lines = f.readlines()
+
+    atom_lines = [line for line in lines if line.startswith(("ATOM", "HETATM"))]
+    serial = int(atom_lines[-1][6:11]) if atom_lines else 0
+    resid = int(atom_lines[-1][22:26]) if atom_lines else 0
+
+    new_lines = []
+    for line in water_lines:
+        serial += 1
+        resid += 1
+        new_lines.append(f"HETATM{serial % 100000:5d}{line[11:22]}{resid % 10000:4d}{line[26:].rstrip()}\n")
+    new_lines.append("TER\n")
+
+    # Insert the waters before END (or at the end of the file if there is no END record)
+    end_idx = next((i for i, line in enumerate(lines) if line.startswith(("END", "ENDMDL"))), len(lines))
+    if end_idx > 0 and not lines[end_idx - 1].endswith("\n"):
+        lines[end_idx - 1] += "\n"
+    lines = lines[:end_idx] + new_lines + lines[end_idx:]
+
+    with open(pdb_file, "w") as f:
+        f.writelines(lines)
+
+    logger.info(f"{len(water_lines)} crystal waters from {water_source_pdb} added to {pdb_file}")
+    return len(water_lines)
+
+
 def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
     """
     Adds ACE and NME caps to the N- and C-termini of the protein chains in the input PDB file, only where the chain
-    end is truncated (residues missing compared to the SEQRES records of the original {pdb_id}.pdb).
+    end is truncated (chain end differs from the SEQRES records of the original {pdb_id}.pdb).
     Real chain ends are left uncapped so that tleap treats them as charged termini.
+    Chains without SEQRES records (e.g. AlphaFold structures) are capped at both ends.
     Saves the modified structure to {sandbox_dir}/{pdb_id}_prepared_capped.pdb (also written if no cap is added).
 
     Args:
@@ -456,11 +506,16 @@ def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
 
         return C1_position, C2_position, O_position
 
-    # Find which chain ends are truncated from the SEQRES records of the original PDB file
-    truncated = find_truncated_termini(f"{sandbox_dir}/{pdb_id}.pdb")
-
     # Load pdb file
     u = mda.Universe(f"{sandbox_dir}/{input_pdb}")
+
+    # Find which chain ends are truncated by comparing the chains with the SEQRES records of the original PDB file
+    chain_resnames = {}
+    for seg in u.segments:
+        chain = u.select_atoms(f"segid {seg.segid}")
+        chain_id = chain.chainIDs[0] if hasattr(chain, "chainIDs") else seg.segid
+        chain_resnames[chain_id] = list(chain.residues.resnames)
+    truncated = find_truncated_termini(f"{sandbox_dir}/{pdb_id}.pdb", chain_resnames)
 
     # Access each fragment separately
     res_start = 0
@@ -470,9 +525,7 @@ def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
     for seg in u.segments:
         chain = u.select_atoms(f"segid {seg.segid}")
         chain_id = chain.chainIDs[0] if hasattr(chain, "chainIDs") else seg.segid
-        if chain_id not in truncated:
-            logger.warning(f"Chain {chain_id} of {input_pdb} not found in the chains of {pdb_id}.pdb ({list(truncated)}): its ends are left uncapped.")
-        cap_n, cap_c = truncated.get(chain_id, (False, False))
+        cap_n, cap_c = truncated[chain_id]
         report.append(f"chain {chain_id}: N-terminus {'capped with ACE' if cap_n else 'left uncapped'}, C-terminus {'capped with NME' if cap_c else 'left uncapped'}")
 
         # Add ACE
@@ -493,12 +546,12 @@ def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
 
             ace_universe = create_universe(**kwargs)
 
-        # Add NME (methyl carbon named CH3 as in ff14SB)
+        # Add NME (methyl carbon named C as in ff14SB)
         resid_c = chain.residues.resids[-1]
         end_residue = u.select_atoms(f"segid {seg.segid} and resid {resid_c}")
         if cap_c:
             nme_positions = get_nme_pos(end_residue)
-            nme_names = ["N", "CH3"]
+            nme_names = ["N", "C"]
 
             resid = chain.residues.resids[-1] + 2
 
@@ -547,7 +600,7 @@ def add_caps(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:
     insert_ter_after_chain_ends(f"{sandbox_dir}/{pdb_id}_prepared_capped.pdb")
 
     logger.info("Capping: " + "; ".join(report))
-    return f"Capping done ({'; '.join(report)}). Only truncated chain ends were capped with ACE/NME, real chain ends were left uncapped so that they are charged by tleap. Saved to {sandbox_dir}/{pdb_id}_prepared_capped.pdb"
+    return f"Capping done ({'; '.join(report)}). Only truncated chain ends (or chains without SEQRES records) were capped with ACE/NME, real chain ends were left uncapped so that they are charged by tleap. Saved to {sandbox_dir}/{pdb_id}_prepared_capped.pdb"
 
 
 def protonate_protein(sandbox_dir: str, input_pdb: str, pdb_id: str, ph: float) -> str:
@@ -576,7 +629,15 @@ def protonate_protein(sandbox_dir: str, input_pdb: str, pdb_id: str, ph: float) 
     # Make sure each chain end is followed by a TER record for tleap
     n_ter = insert_ter_after_chain_ends(f"{sandbox_dir}/{pdb_output}")
 
-    return f"Protein protonated at pH={ph} with PDB2PQR (PROPKA). Saved to {sandbox_dir}/{pdb_output} (input for run_tleap_protein, {n_ter} TER records, one per chain end) and {sandbox_dir}/{pqr_file}."
+    # Add back the crystal waters (removed by prepare_pdb_file_ligand), they are not protonated by PDB2PQR: tleap builds their hydrogens
+    n_waters = 0
+    fixed_pdb = f"{sandbox_dir}/{pdb_id}_fixed.pdb"
+    if Path(fixed_pdb).exists():
+        n_waters = add_crystal_waters(fixed_pdb, f"{sandbox_dir}/{pdb_output}")
+    else:
+        logger.warning(f"{fixed_pdb} not found: no crystal waters added to {pdb_output}")
+
+    return f"Protein protonated at pH={ph} with PDB2PQR (PROPKA). Saved to {sandbox_dir}/{pdb_output} (input for run_tleap_protein, {n_ter} TER records, one per chain end) and {sandbox_dir}/{pqr_file}. {n_waters} crystal waters from {pdb_id}_fixed.pdb were added at the end of {pdb_output}."
 
 
 def rename_histidines(sandbox_dir: str, input_pdb: str, pdb_id: str) -> str:

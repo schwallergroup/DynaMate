@@ -1,6 +1,6 @@
 #!/bin/bash
-if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 sandbox_dir input_gro log_file [ligand_name] [ligand_file] [ligand_gro]"
+if [ "$#" -lt 4 ]; then
+    echo "Usage: $0 sandbox_dir input_gro ionic_conc log_file [ligand_name] [ligand_file] [ligand_gro]"
     exit 1
 fi
 
@@ -17,16 +17,17 @@ else
 fi
 SANDBOX_DIR="$1"
 INPUT_GRO="$2"
-LOG_FILE="$3"
+IONIC_CONC="${3:-0.15}"  # Default to 0.15 M if not set
+LOG_FILE="$4"
 
 > $LOG_FILE 
 echo "Starting GROMACS Equilibration Log" >> $LOG_FILE 2>&1
 
 # Optional argument
 if [ "$#" -ge 5 ]; then
-    LIGNAME="$4"
-	LIGFILE="$5"
-	LIGGRO="$6"
+    LIGNAME="$5"
+	LIGFILE="$6"
+	LIGGRO="$7"
 else
     LIGNAME=""
 	LIGFILE=""
@@ -35,14 +36,12 @@ fi
 
 #------- FILES BACKUPS AND CLEANUPS ----
 cp topol.top topol_before_equil.top && echo "Copied topol.top to topol_before_equil.top" >> $LOG_FILE 2>&1
-cp index.ndx index_before_equil.ndx && echo "Copied index.ndx to index_before_equil.ndx" >> $LOG_FILE 2>&1
 sed -i 's/WAT/SOL/g' topol.top >> $LOG_FILE 2>&1
 
-rm solv.gro solv_ions.gro em.gro nvt.gro npt.gro
+rm -f solv.gro solv_ions.gro em.gro nvt.gro npt.gro
 
 # NaCl concentration (M) added on top of the neutralizing counter-ions, set by gromacs_equil
 # (0.15 = physiological environment, 0 = counter-ions only)
-IONIC_CONC="${IONIC_CONC:-0.15}"
 echo "Ionic concentration: $IONIC_CONC M NaCl" >> $LOG_FILE 2>&1
 
 #------- SOLVATE and BOX ---------------
@@ -61,7 +60,7 @@ fi
 
 #------- ENERGY MINIMISATION ------------
 if ! [ -f em.gro ]; then
-	$GMX grompp -f em.mdp -c $INPUT_GRO -p topol.top -o em.tpr >> $LOG_FILE 2>&1
+	$GMX grompp -f em.mdp -c solv_ions.gro -p topol.top -o em.tpr >> $LOG_FILE 2>&1
 	$GMX mdrun -v -deffnm em >> $LOG_FILE 2>&1
 fi
 
@@ -133,234 +132,124 @@ echo "Unique protein molecule types: ${MOL_TYPES[*]}" >> "$LOG_FILE"
 echo "Total physical protein chains: $total_chains" >> "$LOG_FILE"
  
 # ---------------------------------------------------------------------------
-# 2. Detect chain boundaries in GRO file using NME residues
-#    Each chain ends with one NME capping group (6 atoms).
-#    We extract the last residue number of each NME block to get the last
-#    residue number of each physical chain.
-# ---------------------------------------------------------------------------
-n_nme=$(grep -c "NME" em.gro)
-detected_chains=$((n_nme / 6))
-echo "Detected $detected_chains chains in em.gro based on NME residues." >> "$LOG_FILE"
- 
-if [[ $detected_chains -ne $total_chains ]]; then
-    echo "WARNING: topol.top implies $total_chains chains but GRO file has $detected_chains NME-capped chains." >> "$LOG_FILE"
-fi
- 
-# Get last residue number of each chain (every 6th NME atom occurrence = last atom of that NME)
-nme_chain_ends=($(awk '
-{
-    is_nme = ($0 ~ /NME/)
-    if (in_nme && !is_nme) {
-        # Transition: just left an NME block → emit the last NME atom
-        print prev_resnum, prev_atomidx
-    }
-    if (is_nme) {
-        prev_resnum = $1 + 0
-        prev_atomidx = substr($0, 16, 5) + 0
-    }
-    in_nme = is_nme
-}
-END {
-    # Handle case where file ends inside an NME block (unlikely but safe)
-    if (in_nme) print prev_resnum, prev_atomidx
-}' em.gro))
- 
-# nme_chain_ends: flat array of pairs "resnum atomidx" per NME residue (= per chain)
-chain_end_residues=()
-chain_end_atomidx=()
-n_fields=${#nme_chain_ends[@]}
-for ((i=0; i<n_fields; i+=2)); do
-    chain_end_residues+=("${nme_chain_ends[$i]}")
-    chain_end_atomidx+=("${nme_chain_ends[$((i+1))]}")
-done
-echo "Chain end residues:  ${chain_end_residues[*]}" >> "$LOG_FILE"
-echo "Chain end atom indices: ${chain_end_atomidx[*]}" >> "$LOG_FILE"
- 
-# Build residue ranges per physical chain (residue numbers, 1-indexed)
-start=1
-end=0
-declare -a CHAIN_RANGES=()
-for end_residue in "${chain_end_residues[@]}"; do
-    end=$((end_residue + end))
-    CHAIN_RANGES+=("${start}-${end}")
-    start=$((end + 1))
-done
-echo "Residue ranges per physical chain: ${CHAIN_RANGES[*]}" >> "$LOG_FILE"
- 
-# ---------------------------------------------------------------------------
-# 3. Map each unique molecule type to the residue range of its FIRST
-#    physical chain occurrence
-# ---------------------------------------------------------------------------
-declare -A TYPE_TO_RANGE=()
-declare -A TYPE_TO_SHIFT=()   # atom index of last NME atom before this chain
- 
-for mol in "${MOL_TYPES[@]}"; do
-    for ((ci=0; ci<${#CHAIN_SEQ[@]}; ci++)); do
-        if [[ "${CHAIN_SEQ[$ci]}" == "$mol" ]]; then
-            TYPE_TO_RANGE[$mol]="${CHAIN_RANGES[$ci]}"
-            if [[ $ci -eq 0 ]]; then
-                TYPE_TO_SHIFT[$mol]=0
-            else
-                TYPE_TO_SHIFT[$mol]="${chain_end_atomidx[$((ci-1))]}"
-            fi
-            echo "Molecule type $mol → first physical chain index $ci, range ${CHAIN_RANGES[$ci]}, atom shift ${TYPE_TO_SHIFT[$mol]}" >> "$LOG_FILE"
-            break
-        fi
-    done
-done
-
-# ---------------------------------------------------------------------------
-# 4. Create index.ndx if needed
+# 2. Create index.ndx if needed
 # ---------------------------------------------------------------------------
 if [[ ! -f index.ndx ]]; then
     echo "q" | $GMX make_ndx -f em.gro -o index.ndx >> "$LOG_FILE" 2>&1
+    cp index.ndx index_before_equil.ndx && echo "Copied index.ndx to index_before_equil.ndx" >> $LOG_FILE 2>&1
+else
+    cp index.ndx index_before_equil.ndx && echo "Copied index.ndx to index_before_equil.ndx" >> $LOG_FILE 2>&1
 fi
- 
+
 # ---------------------------------------------------------------------------
-# 5. For each unique molecule type, generate posre_<type>.itp
-#    using the residue range of its first physical chain.
-#    Atom indices are renumbered to start from 1 so GROMACS can apply the
-#    file to any instance of that molecule type regardless of absolute index.
+# 3. For each unique molecule type, generate posre_<type>.itp directly from
+#    the [ atoms ] section of its [ moleculetype ] in topol.top.
+#    Atom numbers in [ atoms ] are already local to the molecule type (start
+#    at 1), so no chain boundary detection or renumbering is needed and the
+#    chains do not have to be capped. Heavy atoms only (same selection as
+#    Protein-H: atom names whose first non-digit character is not H).
 # ---------------------------------------------------------------------------
 for mol in "${MOL_TYPES[@]}"; do
     posre_file="posre_${mol}.itp"
-    range="${TYPE_TO_RANGE[$mol]}"
-    shift="${TYPE_TO_SHIFT[$mol]}"
-    echo "Processing molecule type $mol with range $range and atom index shift $shift" >> "$LOG_FILE"
- 
+
     if [[ -f "$posre_file" ]]; then
         echo "$posre_file already exists – skipping." >> "$LOG_FILE"
         continue
     fi
- 
-    echo "Generating $posre_file using range $range, atom index shift $shift" >> "$LOG_FILE"
 
-    # Add residue range index group if not present
-    if ! grep -Fq "Protein-H_&_r_${range}" index.ndx; then
-        echo "Adding group Protein-H_&_r_${range} to index.ndx" >> "$LOG_FILE"
-        echo -e "2 & ri ${range}\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> "$LOG_FILE" 2>&1
-    else
-        echo "Group Protein-H_&_r_${range} already exists in index.ndx" >> "$LOG_FILE"
-    fi
- 
-    # Generate restraint file
-    echo "Protein-H_&_r_${range}" | $GMX genrestr \
-        -f em.gro -n index.ndx \
-        -o "$posre_file" \
-        -fc 1000 1000 1000 >> "$LOG_FILE" 2>&1
-	
-	cp "$posre_file" "$posre_file"_backup
-    # Renumber atom indices to start from 1 (so the file is portable
-    # across all identical chains regardless of their position in em.gro)
-    awk -v shift="$shift" '
-    /^\[ position_restraints \]/ { in_section=1; print; next }
-    /^\[/ && !/\[ position_restraints \]/ { in_section=0 }
-    {
-        if (in_section && /^[[:space:]]*[0-9]/) {
-            printf "%6d %4d %10d %10d %10d\n", $1-shift, $2, $3, $4, $5
-        } else {
-            print
+    echo "Generating $posre_file from [ atoms ] of $mol in $TOPOL_FILE" >> "$LOG_FILE"
+
+    awk -v mol="$mol" '
+    /^[[:space:]]*\[/ {
+        section = $0
+        gsub(/[][[:space:]]/, "", section)
+        if (section == "moleculetype") { want_name = 1; cur = "" }
+        next
+    }
+    /^[[:space:]]*(;|#|$)/ { next }
+    want_name { cur = $1; want_name = 0; next }
+    cur == mol && section == "atoms" {
+        name = $5
+        sub(/^[0-9]+/, "", name)
+        if (name !~ /^H/) {
+            printf "%6d %4d %10d %10d %10d\n", $1, 1, 1000, 1000, 1000
+            n++
         }
     }
-    ' "$posre_file" > "${posre_file}.tmp" && mv "${posre_file}.tmp" "$posre_file"
- 
-    echo "  → $posre_file written and renumbered." >> "$LOG_FILE"
-done
+    END { exit (n > 0 ? 0 : 1) }
+    ' "$TOPOL_FILE" > "${posre_file}.tmp"
 
+    if [[ $? -ne 0 ]]; then
+        echo "ERROR: no heavy atoms found for molecule type $mol in $TOPOL_FILE – $posre_file not written." | tee -a "$LOG_FILE" >&2
+        rm -f "${posre_file}.tmp"
+        exit 1
+    fi
+
+    {
+        echo "; position restraints for heavy atoms of $mol (generated from $TOPOL_FILE)"
+        echo ""
+        echo "[ position_restraints ]"
+        echo ";  i funct       fcx        fcy        fcz"
+        cat "${posre_file}.tmp"
+    } > "$posre_file"
+    rm -f "${posre_file}.tmp"
+
+    echo "  → $posre_file written ($(grep -c '^[[:space:]]*[0-9]' "$posre_file") restrained atoms)." >> "$LOG_FILE"
+done
 
 # ---------------------------------------------------------------------------
 # 6. Ligand position restraints
 # ---------------------------------------------------------------------------
 
 if [ -n "$LIGNAME" ]; then
-	#obabel $LIGFILE -O $LIGGRO
+    # ligand position retraints
 	if ! ls "posre_$LIGNAME.itp" 1> /dev/null 2>&1;then
 		echo "Generating position restraints for ligand $LIGNAME" >> $LOG_FILE 2>&1
 		echo -e "0 & ! a H* \n q" | $GMX make_ndx -f $LIGGRO -o "index_$LIGNAME.ndx" >> $LOG_FILE 2>&1
 		echo "3" | $GMX genrestr -f $LIGGRO -n "index_$LIGNAME.ndx" -o "posre_$LIGNAME.itp" -fc 1000 1000 1000 >> $LOG_FILE 2>&1
 	fi
+
+    # Create protein-ligand tcoupling group
+    if grep "Protein_$LIGNAME" index.ndx; then
+        echo "Protein_$LIGNAME already in index.ndx" >> $LOG_FILE 2>&1
+    else
+        echo -e "1 | 13\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+    fi
 fi
 
 # Create group Water_and_ions if not exists
 if grep -q "Water_and_ions" index.ndx; then
 	echo "Group Water_and_ions already exists in index.ndx"	
 else
-	if grep -q "Cl-" index.ndx; then
-		echo -e '"WAT" | "Cl-" \n q' | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
-		sed -i 's/Water_Cl-/Water_and_ions/g' index.ndx
+	if grep -q "Cl" index.ndx; then
+        if grep -q "Na" index.ndx; then
+            echo -e '"SOL" | "Cl" | "Na" \n q' | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+            sed -i 's/SOL_Cl_Na/Water_and_ions/g' index.ndx
+            echo "Group Water_and_ions created in index.ndx" >> $LOG_FILE 2>&1
+        else
+            echo -e '"SOL" | "Cl" \n q' | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+            sed -i 's/SOL_Cl/Water_and_ions/g' index.ndx
+            echo "Group Water_and_ions created in index.ndx" >> $LOG_FILE 2>&1
+        fi
+    elif grep -q "Na" index.ndx; then
+		echo -e '"SOL" | "Na" \n q' | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
+		sed -i 's/SOL_Na/Water_and_ions/g' index.ndx
 		echo "Group Water_and_ions created in index.ndx" >> $LOG_FILE 2>&1
-	fi
-	if grep -q "Na+" index.ndx; then
-		echo -e '"WAT" | "Na+" \n q' | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
-		sed -i 's/Water_Na+/Water_and_ions/g' index.ndx
-		echo "Group Water_and_ions created in index.ndx" >> $LOG_FILE 2>&1
-	fi
-fi
-
-#------ Update Water_and_ions is no ions present -----
-if ! grep -q "Cl-" index.ndx && ! grep -q "Na+" index.ndx; then
-	nvt_file="nvt.mdp"
-	npt_file="npt.mdp"
-	original="Protein Water_and_ions"
-	
-	if [ -n "$LIGNAME" ]; then
-		replacement="Protein_$LIGNAME Water"
-		if grep "Protein_$LIGNAME" index.ndx; then
-			echo "Protein_$LIGNAME already in index.ndx" >> $LOG_FILE 2>&1
-		else
-			echo -e "1 | 13\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
-		fi
 	else
-		replacement="Protein Water"
-	fi
-	
-    if grep "$original" "$nvt_file"; then
-		sed -i "s|$original|$replacement|" "$nvt_file"
-		echo "$replacement added successfully to tc-grps group in $nvt_file." >> $LOG_FILE 2>&1
-	else
-		echo "tc-grps line was not found in $nvt_file." >> $LOG_FILE 2>&1
-	fi
-
-	if grep "$original" "$npt_file"; then
-		sed -i "s|$original|$replacement|" "$npt_file"
-		echo "$replacement added successfully to tc-grps group in $npt_file." >> $LOG_FILE 2>&1
-	else
-		echo "tc-grps line was not found in $npt_file." >> $LOG_FILE 2>&1
-	fi
-
-else
-	echo "Ions present. Keeping Water_and_ions group." >> $LOG_FILE 2>&1
-fi
-#-------- UPDATE TEMP GROUPS NPT, NVT, MD.MDP FILES if there are ions -----
-
-if grep -q "Cl-" index.ndx || grep -q "Na+" index.ndx; then
-	if [ -n "$LIGNAME" ]; then	
-		nvt_file="nvt.mdp"
-		npt_file="npt.mdp"
-
-		original="Protein Water_and_ions"
-		replacement="Protein_$LIGNAME Water_and_ions"
-		
-		if grep "Protein_$LIGNAME" index.ndx; then
-			echo "Protein_$LIGNAME already in index.ndx" >> $LOG_FILE 2>&1
-		else
-			echo -e "1 | 13\nq" | $GMX make_ndx -f em.gro -n index.ndx -o index.ndx >> $LOG_FILE 2>&1
-		fi
-
-		if grep "$original" "$nvt_file"; then
-			sed -i "s|$original|$replacement|" "$nvt_file"
-			echo "Protein_$LIGNAME added successfully to tc-grps group in $nvt_file." >> $LOG_FILE 2>&1
-		else
-			echo "tc-grps line "Protein Water_and_ions" was not found in $nvt_file." >> $LOG_FILE 2>&1
-		fi
-
-		if grep "$original" "$npt_file"; then
-			sed -i "s|$original|$replacement|" "$npt_file"
-			echo "Protein_$LIGNAME added successfully to tc-grps group in $npt_file." >> $LOG_FILE 2>&1
-		else
-			echo "tc-grps line "Protein Water_and_ions" was not found in $npt_file." >> $LOG_FILE 2>&1
-		fi
-	fi
+        echo "No ions present. Turning Water_and_ions group into Water in mdp files." >> $LOG_FILE 2>&1
+        if grep "Water_and_ions" nvt.mdp; then
+		    sed -i "s|Water_and_ions|Water|g" nvt.mdp
+            echo "Water_and_ions replaced with Water in nvt.mdp" >> $LOG
+    	else
+		    echo "Water_and_ions line was not found in nvt.mdp." >> $LOG_FILE 2>&1
+	    fi
+        if grep "Water_and_ions" npt.mdp; then
+		    sed -i "s|Water_and_ions|Water|g" npt.mdp
+            echo "Water_and_ions replaced with Water in npt.mdp" >> $LOG
+    	else
+		    echo "Water_and_ions line was not found in npt.mdp." >> $LOG_FILE 2>&1
+	    fi
+    fi
 fi
 
 #--------------- NVT --------------------
